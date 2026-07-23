@@ -390,37 +390,89 @@ function themeCard(dir,cls){
 }
 
 /* ============ recommendations (synthesis) ============ */
-function recommendations(){
-  var acts=[];
-  // rank losers
+/* build candidate actions, each with a measurable metric+target so the loop can grade it */
+function buildActions(){
+  var acts=[];function push(o){o.id=o.type+':'+o.target;acts.push(o);}
   if(D.rank&&D.rank.length){var g=growth(D.rank,function(r){return r.keyword;},function(r){return num(r,'rank');});
-    (g||[]).filter(function(x){return x.prev>0&&x.recent>x.prev+2;}).forEach(function(x){acts.push({t:'“'+x.k+'” lost rank #'+Math.round(x.prev)+' → #'+Math.round(x.recent),why:'Raise bid / refresh listing before sales slip.',dom:'Keywords',sev:2,impact:(x.recent-x.prev)*3000});});}
-  // stockout soon
+    (g||[]).filter(function(x){return x.prev>0&&x.recent>x.prev+2;}).forEach(function(x){push({type:'rank',target:x.k,metric:'rank',metricVal:x.recent,t:'“'+x.k+'” lost rank #'+Math.round(x.prev)+' → #'+Math.round(x.recent),why:'Raise bid / refresh listing before sales slip.',dom:'Keywords',sev:2,impact:(x.recent-x.prev)*3000});});}
   if(D.inventory&&D.inventory.length&&D.sales&&D.sales.length){var byS={};D.inventory.forEach(function(r){byS[r.internal_sku]=(byS[r.internal_sku]||0)+num(r,'stock_on_hand');});
-    Object.keys(byS).forEach(function(k){var v=velocityPerDay(k);var cover=v>0?byS[k]/v:999;if(cover<10)acts.push({t:name(k)+' runs out in ~'+cover.toFixed(0)+' days',why:'Replenish or you lose rank during the gap.',dom:'Inventory',sev:cover<5?3:2,impact:v*5000});});}
-  // money losers
+    Object.keys(byS).forEach(function(k){var v=velocityPerDay(k);var cover=v>0?byS[k]/v:999;if(cover<10)push({type:'revenue',target:k,metric:'revenue',metricVal:currentMetric('revenue',k)||0,t:name(k)+' runs out in ~'+cover.toFixed(0)+' days',why:'Replenish or you lose rank during the gap.',dom:'Inventory',sev:cover<5?3:2,impact:v*5000});});}
   if(D.cost&&D.cost.length){var rev=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'revenue');});var un=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'units');});var adsp=groupSum((D.ads||[]).filter(function(r){return r.internal_sku;}),function(r){return r.internal_sku;},function(r){return num(r,'spend');});var cm={};D.cost.forEach(function(c){cm[c.internal_sku]={uc:num(c,'unit_cost'),fee:num(c,'platform_fee_pct')/100};});
-    Object.keys(rev).forEach(function(k){var c=cm[k]||{uc:0,fee:0};var m=rev[k]-un[k]*c.uc-rev[k]*c.fee-(adsp[k]||0);if(m<0)acts.push({t:name(k)+' is unprofitable after ads ('+inr(m)+')',why:'Cut ad spend or raise price.',dom:'Profitability',sev:2,impact:Math.abs(m)});});}
-  // wasteful campaigns
+    Object.keys(rev).forEach(function(k){var c=cm[k]||{uc:0,fee:0};var m=rev[k]-un[k]*c.uc-rev[k]*c.fee-(adsp[k]||0);if(m<0)push({type:'margin',target:k,metric:'margin',metricVal:m,t:name(k)+' is unprofitable after ads ('+inr(m)+')',why:'Cut ad spend or raise price.',dom:'Profitability',sev:2,impact:Math.abs(m)});});}
   if(D.ads&&D.ads.length){var sp=groupSum(D.ads,function(r){return r.campaign||'(unnamed)';},function(r){return num(r,'spend');});var at=groupSum(D.ads,function(r){return r.campaign||'(unnamed)';},function(r){return num(r,'attributed_sales');});
-    Object.keys(sp).forEach(function(c){var roas=sp[c]>0?at[c]/sp[c]:0;if(roas<1.5&&sp[c]>1000)acts.push({t:'Campaign “'+c+'” at '+roas.toFixed(1)+'× ROAS',why:'Pause or restructure — spending '+inrS(sp[c])+' for little return.',dom:'Advertising',sev:2,impact:sp[c]*0.5});});}
-  // competitor price cuts
+    Object.keys(sp).forEach(function(c){var roas=sp[c]>0?at[c]/sp[c]:0;if(roas<1.5&&sp[c]>1000)push({type:'roas',target:c,metric:'roas',metricVal:roas,t:'Campaign “'+c+'” at '+roas.toFixed(1)+'× ROAS',why:'Pause or restructure — spending '+inrS(sp[c])+' for little return.',dom:'Advertising',sev:2,impact:sp[c]*0.5});});}
   if(D.competitors&&D.competitors.length){var cg=growth(D.competitors,function(r){return r.competitor+' · '+r.product;},function(r){return num(r,'price');});
-    (cg||[]).filter(function(x){return x.prev>0&&x.recent<x.prev*0.92;}).forEach(function(x){acts.push({t:x.k+' cut price '+inr(x.prev)+' → '+inr(x.recent),why:'Review your price / push a bundle.',dom:'Pricing',sev:1,impact:5000});});}
-  acts.sort(function(a,b){return(b.sev-a.sev)||(b.impact-a.impact);});
+    (cg||[]).filter(function(x){return x.prev>0&&x.recent<x.prev*0.92;}).forEach(function(x){push({type:'price',target:x.k,metric:'revenue',metricVal:0,t:x.k+' cut price '+inr(x.prev)+' → '+inr(x.recent),why:'Review your price / push a bundle.',dom:'Pricing',sev:1,impact:5000});});}
+  return acts;
+}
+
+/* ---- self-improving loop: log action -> measure outcome after next upload -> reweight ---- */
+function getLog(){try{return JSON.parse(localStorage.getItem('qcomm_actionlog')||'[]');}catch(e){return[];}}
+function setLog(l){localStorage.setItem('qcomm_actionlog',JSON.stringify(l));}
+function getW(){try{return JSON.parse(localStorage.getItem('qcomm_weights')||'{}');}catch(e){return{};}}
+function setW(w){localStorage.setItem('qcomm_weights',JSON.stringify(w));}
+function dataDate(){var d=(D.sales||[]).map(function(r){return r.date;}).filter(Boolean).sort();return d.length?d[d.length-1]:'';}
+function lowerBetter(m){return m==='rank';}
+function weightFactor(type){var w=getW()[type];if(!w||w.total<2)return 1;return 0.5+(w.hits/w.total);} // 0.5–1.5
+function currentMetric(type,target){
+  if(type==='rank'){var rows=(D.rank||[]).filter(function(r){return r.keyword===target;});if(!rows.length)return null;var mx=rows.map(function(r){return r.date;}).sort().pop();var last=rows.filter(function(r){return r.date===mx;});return last.reduce(function(s,r){return s+num(r,'rank');},0)/last.length;}
+  if(type==='margin'){var rev=(D.sales||[]).filter(function(r){return r.internal_sku===target;}).reduce(function(s,r){return s+num(r,'revenue');},0);var un=(D.sales||[]).filter(function(r){return r.internal_sku===target;}).reduce(function(s,r){return s+num(r,'units');},0);var adsp=(D.ads||[]).filter(function(r){return r.internal_sku===target;}).reduce(function(s,r){return s+num(r,'spend');},0);var c=(D.cost||[]).find(function(x){return x.internal_sku===target;});var uc=c?num(c,'unit_cost'):0,fee=c?num(c,'platform_fee_pct')/100:0;return rev-un*uc-rev*fee-adsp;}
+  if(type==='roas'){var s=(D.ads||[]).filter(function(r){return(r.campaign||'(unnamed)')===target;});var sp=s.reduce(function(a,r){return a+num(r,'spend');},0),at=s.reduce(function(a,r){return a+num(r,'attributed_sales');},0);return sp>0?at/sp:null;}
+  if(type==='revenue'||type==='price'){var P=splitPeriods(D.sales);var rows=(P.ok?P.recent:(D.sales||[]));return rows.filter(function(r){return r.internal_sku===target;}).reduce(function(s,r){return s+num(r,'revenue');},0);}
+  return null;
+}
+function measureOutcomes(){
+  var log=getLog(),w=getW(),changed=false;
+  log.forEach(function(e){
+    if(e.status!=='done'||e.measured)return;
+    var cur=currentMetric(e.type,e.target);
+    if(cur===null||cur===e.baseline)return; // no follow-up data yet
+    var improved=lowerBetter(e.metric)?(cur<e.baseline):(cur>e.baseline);
+    e.measured=true;e.outcome=improved?'worked':'no effect';e.current=cur;
+    var t=w[e.type]=w[e.type]||{hits:0,total:0,sumRealized:0};
+    t.total++;if(improved)t.hits++;t.sumRealized+=Math.abs(cur-e.baseline);changed=true;
+  });
+  if(changed){setLog(log);setW(w);}
+  return changed;
+}
+function logAction(d){var log=getLog();if(log.some(function(e){return e.id===d.id&&e.status==='done';}))return;
+  log.push({id:d.id,type:d.type,target:d.target,metric:d.metric,baseline:parseFloat(d.val)||0,predicted:parseFloat(d.pred)||0,ts:dataDate(),status:'done'});setLog(log);}
+function dismissAction(id){var log=getLog();log.push({id:id,status:'dismissed',ts:dataDate()});setLog(log);}
+
+/* ============ recommendations (synthesis + learning) ============ */
+function recommendations(){
+  measureOutcomes();
+  var acts=buildActions();var done={};getLog().forEach(function(e){if(e.status==='done')done[e.id]=e;if(e.status==='dismissed')done[e.id]=done[e.id]||{dismissed:true};});
+  acts=acts.filter(function(a){return!(done[a.id]&&done[a.id].dismissed);});
+  acts.forEach(function(a){a.rankScore=a.impact*weightFactor(a.type);});
+  acts.sort(function(a,b){return(b.sev-a.sev)||(b.rankScore-a.rankScore);});
   if(!acts.length)return'<div class="note">Upload more feeds (rank, inventory, ads, cost, competitors) to generate recommended actions.</div>';
-  return acts.slice(0,10).map(function(a){var sc=a.sev>=3?'crit':(a.sev>=2?'warn':'acc');
-    return'<div class="qblock card" style="padding:12px 15px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><div class="strong">'+esc(a.t)+'</div><div class="subtle">'+esc(a.why)+'</div></div><div style="text-align:right;white-space:nowrap"><span class="pill '+sc+'">'+esc(a.dom)+'</span><div class="num" style="color:var(--good);font-weight:600;margin-top:4px">~'+inrS(a.impact)+'</div></div></div></div>';}).join('');
+  return acts.slice(0,12).map(function(a){var sc=a.sev>=3?'crit':(a.sev>=2?'warn':'acc');
+    var winfo=getW()[a.type];var wb=(winfo&&winfo.total>=2)?' <span class="pill acc" title="learned from your past outcomes">×'+weightFactor(a.type).toFixed(2)+'</span>':'';
+    var lg=done[a.id];
+    var foot=lg?'<span class="pill '+(lg.measured?(lg.outcome==='worked'?'acc':'warn'):'warn')+'">'+(lg.measured?('outcome: '+lg.outcome):'acted · measuring next upload')+'</span>'
+      :'<button class="btn rec-done" data-id="'+esc(a.id)+'" data-type="'+esc(a.type)+'" data-target="'+esc(a.target)+'" data-metric="'+a.metric+'" data-val="'+(a.metricVal||0)+'" data-pred="'+a.impact+'">Mark done</button> <button class="btn ghost rec-dismiss" data-id="'+esc(a.id)+'">Dismiss</button>';
+    return'<div class="qblock card" style="padding:12px 15px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><div class="strong">'+esc(a.t)+'</div><div class="subtle">'+esc(a.why)+'</div><div style="margin-top:9px">'+foot+'</div></div><div style="text-align:right;white-space:nowrap"><span class="pill '+sc+'">'+esc(a.dom)+'</span>'+wb+'<div class="num" style="color:var(--good);font-weight:600;margin-top:4px">~'+inrS(a.impact)+'</div></div></div></div>';}).join('');
+}
+function renderLearning(body){
+  var w=getW(),log=getLog();
+  var LB={rank:'Bid up on rank drop',revenue:'Replenish before stockout',margin:'Fix unprofitable SKU',roas:'Pause wasteful campaign',price:'React to competitor price'};
+  var rows=Object.keys(LB).map(function(t){var e=w[t];if(!e||!e.total)return[LB[t],'—','—','×1.00 · neutral'];var hr=(e.hits/e.total*100).toFixed(0)+'%';return[LB[t],e.hits+'/'+e.total,hr,'×'+weightFactor(t).toFixed(2)];});
+  var done=log.filter(function(e){return e.status==='done';}).length,measured=log.filter(function(e){return e.measured;}).length,worked=log.filter(function(e){return e.outcome==='worked';}).length;
+  body.innerHTML='<div class="card note" style="margin-bottom:16px">Every action you mark <b>done</b> is logged with the current metric as a baseline. After your <b>next monthly upload</b>, the engine checks whether that metric actually improved and <b>reweights</b> each action type by its real hit-rate. Higher weight → that kind of action has worked for <i>you</i>, so it ranks higher. This is the self-improving loop — grounded in your outcomes, not guesses.</div>'+
+    '<div class="kpis"><div class="kpi"><div class="eyebrow">Actions taken</div><div class="stat" style="font-size:20px">'+done+'</div></div><div class="kpi"><div class="eyebrow">Measured</div><div class="stat" style="font-size:20px">'+measured+'</div></div><div class="kpi"><div class="eyebrow">Worked</div><div class="stat" style="font-size:20px">'+worked+'</div></div></div>'+
+    '<div class="sec-head"><h2>Learned weights by action type</h2><span class="meta">updates after each upload</span></div><div class="card">'+rTable(['Action type','Hits','Hit rate','Weight'],rows)+'</div>'+
+    (done?'<div style="margin-top:14px"><button class="btn ghost" id="resetLearn">Reset learning</button></div>':'');
 }
 
 /* ============ dashboard render ============ */
-var DOMAINS=['Overview','Recommendations','Sales','Marketplace','Geographic','Customer','Keywords','Advertising','Pricing','Inventory','Competitors','Content','Profitability','Forecast'];
-var DOM_SUB={Recommendations:'What to do this month, ranked by impact',Content:'Needs a listing-content feed (images, titles, CTR) — not in monthly CSVs'};
+var DOMAINS=['Overview','Recommendations','Learning','Sales','Marketplace','Geographic','Customer','Keywords','Advertising','Pricing','Inventory','Competitors','Content','Profitability','Forecast'];
+var DOM_SUB={Recommendations:'What to do this month, ranked by impact × learned weight',Learning:'How the engine improves from your past actions',Content:'Needs a listing-content feed (images, titles, CTR) — not in monthly CSVs'};
 function feedsReady(needs){return needs.every(function(f){return f.indexOf('__')===0?false:(D[f]&&D[f].length);});}
 function loadAll(){FEEDS.forEach(function(f){D[f]=load(f);});}
 
 function domCount(dom){
-  if(dom==='Overview'||dom==='Recommendations')return null;
+  if(dom==='Overview'||dom==='Recommendations'||dom==='Learning')return null;
   var qs=REG.filter(function(x){return x.dom===dom;});var ready=qs.filter(function(x){return feedsReady(x.needs);}).length;
   return ready+'/'+qs.length;
 }
@@ -439,6 +491,7 @@ function renderDomain(dom){
   }
   if(dom==='Overview'){renderOverview(body);return;}
   if(dom==='Recommendations'){body.innerHTML=recommendations();return;}
+  if(dom==='Learning'){renderLearning(body);return;}
   var qs=REG.filter(function(x){return x.dom===dom;});
   body.innerHTML=qs.map(function(x){
     var head='<div class="qh">'+esc(x.q);
@@ -569,6 +622,13 @@ document.querySelectorAll('.tab').forEach(function(t){t.addEventListener('click'
 document.getElementById('loadSample').addEventListener('click',function(){var s=buildSample();Object.keys(s).forEach(function(k){save(k,s[k]);});renderSetup();toast('Full sample loaded');go('dashboard');});
 document.getElementById('clearAll').addEventListener('click',function(){FEEDS.forEach(function(f){localStorage.removeItem(KEY(f));});renderSetup();toast('All data cleared');});
 
+/* delegated clicks for the self-improving loop buttons */
+document.getElementById('domBody').addEventListener('click',function(e){
+  var t=e.target;
+  if(t.classList.contains('rec-done')){logAction(t.dataset);toast('Logged — I’ll grade this after your next upload');renderDomain('Recommendations');}
+  else if(t.classList.contains('rec-dismiss')){dismissAction(t.dataset.id);toast('Dismissed');renderDomain('Recommendations');}
+  else if(t.id==='resetLearn'){localStorage.removeItem('qcomm_actionlog');localStorage.removeItem('qcomm_weights');toast('Learning reset');renderDomain('Learning');}
+});
 loadAll();renderNav('Overview');renderDomain('Overview');
 
 /* ============ self-check (money path) ============ */
