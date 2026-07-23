@@ -38,6 +38,34 @@ competitor listing snapshots) show what extra data they need.
 `sales.csv` is the minimum. The **Recommendations** page synthesises actions
 across whatever feeds are present, ranked by severity × impact.
 
+## Keyword Volume Engine
+The **Keyword Volume** tab turns raw signals into decisions. Since no q-commerce
+platform publishes search volume, it builds a **0–100 volume index** as a weighted
+composite and flags confidence:
+
+```
+volume_index = 0.40·ad_impressions + 0.30·amazon_sqp_rank
+             + 0.20·autocomplete_position + 0.10·google_volume   (normalised 0–100)
+confidence   = "real"  if ad/SQP signal present, else "proxy"
+opportunity  = volume_index × (1 − your_visibility) × conversion
+```
+It then ranks every keyword by opportunity and assigns an action (Bid up / Fix /
+Protect / Attack / Ride trend). Feed it via `keyword_volume.csv` — provide whatever
+signals you have; missing ones are simply down-weighted.
+
+### Discover keywords (free, no keys)
+`tools/collect-keywords.mjs` expands seed terms via Google autocomplete and writes
+a ready-to-upload `keyword_volume.csv`:
+
+```
+node tools/collect-keywords.mjs "eco friendly plates" "paper cups" --platform Blinkit --depth 1 > keyword_volume.csv
+node tools/collect-keywords.mjs --self-test        # offline check
+```
+Autocomplete fills `autocomplete_rank` (a popularity/order signal). For **real**
+per-platform volume, add `ad_impressions` (your ad reports) and `amazon_sqp_rank`
+(Amazon Brand Analytics) columns before uploading. Platform-native autocomplete
+(Blinkit/Zepto) needs their endpoints + a proxy — wire those into `fetchSuggestions`.
+
 ## Deploy to Vercel (zero config — static site)
 ```
 npm i -g vercel

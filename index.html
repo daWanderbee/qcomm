@@ -75,6 +75,7 @@
   .kpi .eyebrow{margin-bottom:5px}
   .pill{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px}
   .pill.crit{background:var(--crit-soft);color:var(--crit)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.acc{background:var(--accent-soft);color:var(--accent)}
+  .pill.protect{background:var(--good-soft);color:var(--good)} .pill.fix{background:var(--warn-soft);color:var(--warn)} .pill.attack{background:var(--crit-soft);color:var(--crit)} .pill.bidup{background:var(--accent-soft);color:var(--accent)}
   /* setup */
   .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:22px}
   .step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
@@ -222,6 +223,56 @@ function rNote(t){return'<div class="note">'+esc(t)+'</div>';}
 
 /* ============ the question registry ============ */
 /* each: {dom, q, needs:[feeds], run:()=>{html}}  run returns null to show "no data" */
+/* ===== Keyword Volume Engine ===== */
+/* Composites raw signals into a 0-100 volume index + confidence, then joins rank
+   & conversion into an opportunity score and a recommended action. Accepts either
+   raw signals (ad_impressions, amazon_sqp_rank, autocomplete_rank, google_volume)
+   or a pre-computed volume_index. Real signals (ads/SQP) mark confidence "high". */
+function keywordEngine(){
+  var kv=D.keyword_volume||[];if(!kv.length)return[];
+  var adAgg={};(D.ads||[]).forEach(function(r){if(!r.keyword)return;var o=adAgg[r.keyword]=adAgg[r.keyword]||{imp:0,clk:0,sales:0};o.imp+=num(r,'impressions');o.clk+=num(r,'clicks');o.sales+=num(r,'attributed_sales');});
+  var bestRank={};(D.rank||[]).forEach(function(r){var k=r.keyword,v=num(r,'rank');if(v>0&&(!(k in bestRank)||v<bestRank[k]))bestRank[k]=v;});
+  var rows=kv.map(function(r){var ai=num(r,'ad_impressions')||(adAgg[r.keyword]?adAgg[r.keyword].imp:0);
+    return{platform:r.platform,keyword:r.keyword,ad_imp:ai,sqp:num(r,'amazon_sqp_rank'),ac:num(r,'autocomplete_rank'),gv:num(r,'google_volume'),
+      provided:num(r,'volume_index'),competition:num(r,'competition'),trendCol:(r.trend!==undefined?num(r,'trend'):null),
+      prevIdx:(r.prev_volume_index!==undefined?num(r,'prev_volume_index'):null),rank:bestRank[r.keyword],ad:adAgg[r.keyword]};});
+  var maxImp=Math.max.apply(null,[1].concat(rows.map(function(x){return x.ad_imp;})));
+  var maxGv=Math.max.apply(null,[1].concat(rows.map(function(x){return x.gv;})));
+  function acScore(r){return r>0?Math.max(0,105-r*5):0;}                 // suggestion pos 1 -> 100
+  function sqpScore(r){return r>0?Math.max(0,100-Math.log(r)/Math.LN10*25):0;} // SQP rank 1->100, 100->50
+  rows.forEach(function(x){
+    var sig=[],conf='proxy';
+    if(x.ad_imp>0){sig.push([0.40,x.ad_imp/maxImp*100]);conf='high';}
+    if(x.sqp>0){sig.push([0.30,sqpScore(x.sqp)]);conf='high';}
+    if(x.ac>0){sig.push([0.20,acScore(x.ac)]);}
+    if(x.gv>0){sig.push([0.10,x.gv/maxGv*100]);}
+    var idx;
+    if(sig.length){var ws=sig.reduce(function(a,b){return a+b[0];},0);idx=sig.reduce(function(a,b){return a+b[0]*b[1];},0)/ws;}
+    else{idx=x.provided;conf=(x.sqp>0||x.ad_imp>0)?'high':'proxy';}
+    x.volume_index=Math.round(idx);
+    x.trend=(x.prevIdx!==null&&x.prevIdx>0)?Math.round((x.volume_index-x.prevIdx)/x.prevIdx*100):(x.trendCol!==null?x.trendCol:0);
+    x.visibility=x.rank>0?Math.max(0,1-(x.rank-1)/20):0;
+    x.conv=(x.ad&&x.ad.clk>0)?Math.max(0.05,Math.min(1,(x.ad.sales/x.ad.clk)/200)):0.5;
+    x.confidence=conf;
+    x.opportunity=Math.round(x.volume_index*(1-x.visibility)*x.conv);
+    var lowComp=x.competition>0&&x.competition<40;
+    if(x.rank===undefined||x.rank>8)x.action=lowComp?'Attack':'Bid up';
+    else if(x.conv<0.3)x.action='Fix listing';
+    else x.action='Protect';
+    if(x.trend>=25)x.action='Ride trend';
+  });
+  return rows.sort(function(a,b){return b.opportunity-a.opportunity;});
+}
+function seedKeywords(){
+  var base=['plates','meal tray','cups','cutlery','clamshell','container','straws','bowls','food box'];
+  (D.skus||[]).forEach(function(s){if(s.category)base.push(s.category.toLowerCase());});
+  var types=Array.from(new Set(base));
+  var mods=['eco friendly','biodegradable','compostable','disposable','sugarcane','bagasse','paper','wooden','bulk','party','wholesale','microwave safe','leak proof'];
+  var out={};types.forEach(function(t){out[t]=1;mods.forEach(function(m){out[m+' '+t]=1;});});
+  return Object.keys(out);
+}
+function actionPillClass(a){return a==='Protect'?'protect':(a==='Fix listing'?'fix':(a==='Attack'||a==='Ride trend'?'attack':'bidup'));}
+
 function themeList(theme){
   var neg=(D.reviews||[]).filter(function(r){return num(r,'rating')<=3;});
   var kws=THEMES[theme]||[];
@@ -414,17 +465,16 @@ var REG=[
   D.reviews.forEach(function(r){var t=(r.review_text||'').toLowerCase();reqs.forEach(function(w){if(t.indexOf(w)>=0)h[w]=(h[w]||0)+1;});});
   var rows=sorted(h);return rows.length?rBars(rows.map(function(x){return{label:'“'+x.k+'”',v:x.v,disp:String(x.v)};})):rNote('No feature-request phrases found in review_text.');}},
 {dom:'Keywords',q:'Highest-volume keywords',needs:['keyword_volume'],run:function(){
-  return rBars(D.keyword_volume.map(function(r){return{k:r.keyword,v:num(r,'volume_index')};}).sort(function(a,b){return b.v-a.v;}).slice(0,10).map(function(x){return{label:x.k,v:x.v,disp:x.v.toFixed(0)};}));}},
+  var e=keywordEngine();return rBars(e.slice().sort(function(a,b){return b.volume_index-a.volume_index;}).slice(0,10).map(function(x){return{label:x.keyword,v:x.volume_index,disp:x.volume_index+' · '+x.confidence};}));}},
 {dom:'Keywords',q:'Low-competition, high-volume keywords',needs:['keyword_volume'],run:function(){
-  var rows=D.keyword_volume.map(function(r){return{k:r.keyword,vol:num(r,'volume_index'),comp:num(r,'competition')};}).filter(function(x){return x.vol>40&&x.comp<40;}).sort(function(a,b){return(b.vol-b.comp)-(a.vol-a.comp);}).slice(0,8);
-  return rows.length?rTable(['Keyword','Volume','Competition'],rows.map(function(x){return[esc(x.k),x.vol.toFixed(0),'<span class="up">'+x.comp.toFixed(0)+'</span>'];})):rNote('No low-competition high-volume gaps in the data.');}},
+  var rows=keywordEngine().filter(function(x){return x.volume_index>40&&x.competition>0&&x.competition<40;}).sort(function(a,b){return(b.volume_index-b.competition)-(a.volume_index-a.competition);}).slice(0,8);
+  return rows.length?rTable(['Keyword','Volume','Competition'],rows.map(function(x){return[esc(x.keyword),String(x.volume_index),'<span class="up">'+x.competition+'</span>'];})):rNote('No low-competition high-volume gaps in the data.');}},
 {dom:'Keywords',q:'Emerging keywords (rising volume)',needs:['keyword_volume'],run:function(){
-  var rows=D.keyword_volume.filter(function(r){return num(r,'trend')>0;}).map(function(r){return{k:r.keyword,t:num(r,'trend'),v:num(r,'volume_index')};}).sort(function(a,b){return b.t-a.t;}).slice(0,8);
-  return rows.length?rTable(['Keyword','Trend','Volume'],rows.map(function(x){return[esc(x.k),'<span class="up">▲ '+x.t.toFixed(0)+'%</span>',x.v.toFixed(0)];})):rNote('No rising keywords flagged (set trend>0 in the feed).');}},
-{dom:'Keywords',q:'Competitor keywords to target',needs:['keyword_volume','rank'],run:function(){
-  var best={};D.rank.forEach(function(r){var k=r.keyword,v=num(r,'rank');if(!(k in best)||v<best[k])best[k]=v;});
-  var rows=D.keyword_volume.map(function(r){return{k:r.keyword,vol:num(r,'volume_index'),rank:best[r.keyword]};}).filter(function(x){return x.vol>40&&(x.rank===undefined||x.rank>8);}).sort(function(a,b){return b.vol-a.vol;}).slice(0,8);
-  return rows.length?rTable(['Keyword','Volume','Your rank'],rows.map(function(x){return[esc(x.k),x.vol.toFixed(0),x.rank===undefined?'<span class="down">absent</span>':'<span class="down">#'+Math.round(x.rank)+'</span>'];})):rNote('You already rank for the high-volume keywords. 👍');}},
+  var rows=keywordEngine().filter(function(x){return x.trend>0;}).sort(function(a,b){return b.trend-a.trend;}).slice(0,8);
+  return rows.length?rTable(['Keyword','Trend','Volume'],rows.map(function(x){return[esc(x.keyword),'<span class="up">▲ '+x.trend+'%</span>',String(x.volume_index)];})):rNote('No rising keywords flagged (needs trend or prev_volume_index in the feed).');}},
+{dom:'Keywords',q:'Competitor keywords to target',needs:['keyword_volume'],run:function(){
+  var rows=keywordEngine().filter(function(x){return x.volume_index>40&&(x.rank===undefined||x.rank>8);}).sort(function(a,b){return b.volume_index-a.volume_index;}).slice(0,8);
+  return rows.length?rTable(['Keyword','Volume','Your rank'],rows.map(function(x){return[esc(x.keyword),String(x.volume_index),x.rank===undefined?'<span class="down">absent</span>':'<span class="down">#'+Math.round(x.rank)+'</span>'];})):rNote('You already rank for the high-volume keywords. 👍');}},
 {dom:'Advertising',q:'Highest CPC keywords',needs:['ads'],run:function(){
   var b={};D.ads.forEach(function(r){if(!r.keyword)return;var o=b[r.keyword]=b[r.keyword]||{sp:0,clk:0};o.sp+=num(r,'spend');o.clk+=num(r,'clicks');});
   return rTable(['Keyword','CPC'],Object.keys(b).map(function(k){return{k:k,c:b[k].clk>0?b[k].sp/b[k].clk:0};}).sort(function(a,b2){return b2.c-a.c;}).slice(0,8).map(function(x){return[esc(x.k),inr(x.c)];}));}},
@@ -592,14 +642,49 @@ function renderLearning(body){
     (done?'<div style="margin-top:14px"><button class="btn ghost" id="resetLearn">Reset learning</button></div>':'');
 }
 
+function renderKeywordVolume(body){
+  var e=keywordEngine();
+  if(!e.length){
+    body.innerHTML='<div class="card note" style="margin-bottom:16px">No keyword data yet. Two ways to fill the <b>keyword_volume</b> feed:</div>'+
+      '<div class="card" style="padding:16px"><b>1. Generate a seed list</b><p class="subtle" style="margin:6px 0 10px">Cross your product types with modifiers to get a starter keyword list, then go collect signals.</p><button class="btn primary" id="genSeeds">Download seed keywords</button></div>'+
+      '<div class="card" style="padding:16px;margin-top:14px"><b>2. Run the collector</b><p class="subtle" style="margin:6px 0 0">Use <code>tools/collect-keywords.mjs</code> (free Google autocomplete) to expand seeds and fill autocomplete_rank, then upload the CSV. See the README.</p></div>';
+    return;
+  }
+  var hi=e.filter(function(x){return x.confidence==='high';}).length;
+  var emerging=e.filter(function(x){return x.trend>0;}).length;
+  var avg=Math.round(e.reduce(function(a,b){return a+b.volume_index;},0)/e.length);
+  var kpis='<div class="kpis">'+
+    kpi('Keywords tracked',String(e.length),'')+
+    kpi('Avg volume index',String(avg),'')+
+    kpi('High-confidence',Math.round(hi/e.length*100)+'%','')+
+    kpi('Emerging',String(emerging),'')+'</div>';
+  var rows=e.slice(0,40).map(function(x){
+    var conf=x.confidence==='high'?'<span class="pill acc">real</span>':'<span class="pill warn">proxy</span>';
+    var rk=x.rank===undefined?'<span class="down">—</span>':'#'+Math.round(x.rank);
+    var tr=x.trend>0?'<span class="up">▲'+x.trend+'%</span>':(x.trend<0?'<span class="down">▼'+Math.abs(x.trend)+'%</span>':'—');
+    return'<tr><td class="strong">'+esc(x.keyword)+'<div class="plat" style="font-size:11px;color:var(--text-dim)">'+esc(x.platform)+'</div></td>'+
+      '<td class="r num">'+x.volume_index+' '+conf+'</td>'+
+      '<td class="r num">'+(x.competition||'—')+'</td>'+
+      '<td class="r num">'+rk+'</td>'+
+      '<td class="r num">'+tr+'</td>'+
+      '<td class="r num strong">'+x.opportunity+'</td>'+
+      '<td class="r"><span class="pill '+actionPillClass(x.action)+'">'+x.action+'</span></td></tr>';
+  }).join('');
+  body.innerHTML=kpis+
+    '<div class="card note" style="margin-bottom:14px">Volume index = weighted composite of <b>ad impressions</b> (0.40) + <b>Amazon SQP rank</b> (0.30) + <b>autocomplete position</b> (0.20) + <b>Google volume</b> (0.10), normalised 0–100. <b>real</b> = at least one true signal (ads/SQP); <b>proxy</b> = autocomplete/Google only. Opportunity = index × (1−your visibility) × conversion.</div>'+
+    '<div class="sec-head"><h2>Keyword opportunity</h2><span class="meta">ranked by opportunity score</span></div>'+
+    '<div class="card table-wrap"><table><thead><tr><th>Keyword</th><th class="r">Volume</th><th class="r">Comp</th><th class="r">Your rank</th><th class="r">Trend</th><th class="r">Opp.</th><th class="r">Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="card" style="padding:16px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><b>Discover more keywords</b><div class="subtle">Generate a fresh seed list from your catalogue, then collect signals for them.</div></div><button class="btn" id="genSeeds">Download seed keywords</button></div>';
+}
+
 /* ============ dashboard render ============ */
-var DOMAINS=['Overview','Recommendations','Learning','Sales','Marketplace','Geographic','Customer','Keywords','Advertising','Pricing','Inventory','Competitors','Content','Profitability','Forecast'];
-var DOM_SUB={Recommendations:'What to do this month, ranked by impact × learned weight',Learning:'How the engine improves from your past actions',Content:'Needs a listing-content feed (images, titles, CTR) — not in monthly CSVs'};
+var DOMAINS=['Overview','Recommendations','Learning','Sales','Marketplace','Geographic','Customer','Keywords','Keyword Volume','Advertising','Pricing','Inventory','Competitors','Content','Profitability','Forecast'];
+var DOM_SUB={Recommendations:'What to do this month, ranked by impact × learned weight',Learning:'How the engine improves from your past actions','Keyword Volume':'Composite volume index → opportunity → action',Content:'Needs a listing-content feed (images, titles, CTR) — not in monthly CSVs'};
 function feedsReady(needs){return needs.every(function(f){return f.indexOf('__')===0?false:(D[f]&&D[f].length);});}
 function loadAll(){FEEDS.forEach(function(f){D[f]=load(f);});}
 
 function domCount(dom){
-  if(dom==='Overview'||dom==='Recommendations'||dom==='Learning')return null;
+  if(dom==='Overview'||dom==='Recommendations'||dom==='Learning'||dom==='Keyword Volume')return null;
   var qs=REG.filter(function(x){return x.dom===dom;});var ready=qs.filter(function(x){return feedsReady(x.needs);}).length;
   return ready+'/'+qs.length;
 }
@@ -619,6 +704,7 @@ function renderDomain(dom){
   if(dom==='Overview'){renderOverview(body);return;}
   if(dom==='Recommendations'){body.innerHTML=recommendations();return;}
   if(dom==='Learning'){renderLearning(body);return;}
+  if(dom==='Keyword Volume'){renderKeywordVolume(body);return;}
   var qs=REG.filter(function(x){return x.dom===dom;});
   body.innerHTML=qs.map(function(x){
     var head='<div class="qh">'+esc(x.q);
@@ -679,7 +765,7 @@ var TEMPLATES={
   cost:'internal_sku,unit_cost,platform_fee_pct\nPKA-PLT-10,72,22\n',
   returns:'date,platform,internal_sku,units_returned\n2026-07-20,Blinkit,PKA-CUT-WD,6\n',
   listing:'platform,internal_sku,image_count,title,has_aplus,attributes_missing\nBlinkit,PKA-CUP-250,2,Kraft Paper Cup 250ml,false,material\n',
-  keyword_volume:'platform,keyword,volume_index,competition,trend\nBlinkit,eco friendly plates,82,64,5\n',
+  keyword_volume:'platform,keyword,ad_impressions,autocomplete_rank,amazon_sqp_rank,google_volume,competition,prev_volume_index\nBlinkit,eco friendly plates,18000,1,,9000,64,78\n',
   festivals:'date,name,lift_pct,category\n2026-08-15,Independence Day,20,Plates\n'
 };
 
@@ -753,14 +839,15 @@ function buildSample(){
     {platform:'Blinkit',internal_sku:'PKA-CUT-WD',image_count:'1',title:'Wooden Cutlery Set',has_aplus:'false',attributes_missing:'pack size, material'},
     {platform:'Amazon Now',internal_sku:'PKA-CLM-750',image_count:'6',title:'Pakka Sugarcane Bagasse Clamshell 750ml Leak Proof Compostable Container',has_aplus:'true',attributes_missing:'none'}
   ];
+  // raw signals — the engine composites these into the volume index + confidence
   var keyword_volume=[
-    {platform:'Blinkit',keyword:'eco friendly plates',volume_index:'82',competition:'64',trend:'4'},
-    {platform:'Zepto',keyword:'disposable meal tray',volume_index:'71',competition:'58',trend:'-3'},
-    {platform:'Zepto',keyword:'paper cups 250ml',volume_index:'66',competition:'40',trend:'2'},
-    {platform:'Instamart',keyword:'compostable straws',volume_index:'44',competition:'22',trend:'38'},
-    {platform:'Amazon Now',keyword:'bamboo dinner plates',volume_index:'59',competition:'31',trend:'12'},
-    {platform:'Blinkit',keyword:'bulk paper cups',volume_index:'48',competition:'28',trend:'9'},
-    {platform:'Amazon Now',keyword:'sugarcane clamshell',volume_index:'52',competition:'35',trend:'6'}
+    {platform:'Blinkit',keyword:'eco friendly plates',ad_impressions:'18000',autocomplete_rank:'1',google_volume:'9000',competition:'64',prev_volume_index:'78'},
+    {platform:'Zepto',keyword:'disposable meal tray',ad_impressions:'12000',autocomplete_rank:'3',google_volume:'6000',competition:'58',prev_volume_index:'74'},
+    {platform:'Zepto',keyword:'paper cups 250ml',ad_impressions:'9000',autocomplete_rank:'2',google_volume:'5200',competition:'40',prev_volume_index:'63'},
+    {platform:'Instamart',keyword:'compostable straws',autocomplete_rank:'4',google_volume:'2400',competition:'22',prev_volume_index:'30'},
+    {platform:'Amazon Now',keyword:'bamboo dinner plates',amazon_sqp_rank:'120',google_volume:'3600',competition:'31',prev_volume_index:'50'},
+    {platform:'Blinkit',keyword:'bulk paper cups',autocomplete_rank:'6',google_volume:'1800',competition:'28',prev_volume_index:'44'},
+    {platform:'Amazon Now',keyword:'sugarcane clamshell',amazon_sqp_rank:'260',ad_impressions:'3200',google_volume:'2100',competition:'35',prev_volume_index:'49'}
   ];
   var festivals=[
     {date:'2026-08-15',name:'Independence Day',lift_pct:'18',category:'Plates'},
@@ -786,6 +873,7 @@ document.getElementById('domBody').addEventListener('click',function(e){
   if(t.classList.contains('rec-done')){logAction(t.dataset);toast('Logged — I’ll grade this after your next upload');renderDomain('Recommendations');}
   else if(t.classList.contains('rec-dismiss')){dismissAction(t.dataset.id);toast('Dismissed');renderDomain('Recommendations');}
   else if(t.id==='resetLearn'){localStorage.removeItem('qcomm_actionlog');localStorage.removeItem('qcomm_weights');toast('Learning reset');renderDomain('Learning');}
+  else if(t.id==='genSeeds'){var kws=seedKeywords();var csv='platform,keyword,ad_impressions,autocomplete_rank,amazon_sqp_rank,google_volume,competition\n'+kws.map(function(k){return ',"'+String(k).replace(/"/g,'""')+'",,,,,';}).join('\n')+'\n';download('keyword_seeds.csv',csv);toast(kws.length+' seed keywords downloaded');}
 });
 loadAll();renderNav('Overview');renderDomain('Overview');
 
