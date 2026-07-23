@@ -24,8 +24,16 @@ Templates are in `/templates` and downloadable in-app. Keep headers exact.
 | `rank.csv` | date, platform, keyword, internal_sku, city, rank | Keyword rank / losing rankings |
 | `reviews.csv` | date, platform, internal_sku, rating, review_text | Customer (themes, rating trend) |
 | `inventory.csv` | date, platform, internal_sku, warehouse, stock_on_hand | Inventory, stockout forecast |
-| `competitors.csv` | date, platform, competitor, product, price, rating, is_new | Competitors, Pricing |
+| `competitors.csv` | date, platform, competitor, product, price, rating, is_new, sponsored | Competitors, Pricing |
 | `cost.csv` | internal_sku, unit_cost, platform_fee_pct | Profitability (margin after ads) |
+| `returns.csv` | date, platform, internal_sku, units_returned | Marketplace return rate |
+| `listing.csv` | platform, internal_sku, image_count, title, has_aplus, attributes_missing | Content (images, A+, attributes, SEO) |
+| `keyword_volume.csv` | platform, keyword, volume_index, competition, trend | Keyword volume, low-competition, emerging |
+| `festivals.csv` | date, name, lift_pct, category | Forecast (festival impact) |
+
+The app answers **70 questions** across 13 domains; each lights up when its feed
+is present. A few questions (bundles, price-elasticity, inventory ageing,
+competitor listing snapshots) show what extra data they need.
 
 `sales.csv` is the minimum. The **Recommendations** page synthesises actions
 across whatever feeds are present, ranked by severity × impact.

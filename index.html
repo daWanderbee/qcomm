@@ -138,7 +138,7 @@
 
 <script>
 /* ============ feeds & storage ============ */
-var FEEDS=['sales','skus','ads','rank','reviews','inventory','competitors','cost','keywords','cities'];
+var FEEDS=['sales','skus','ads','rank','reviews','inventory','competitors','cost','returns','listing','keyword_volume','festivals','keywords','cities'];
 var KEY=function(f){return 'qcomm_'+f;};
 function load(f){try{return JSON.parse(localStorage.getItem(KEY(f))||'[]');}catch(e){return[];}}
 function save(f,rows){localStorage.setItem(KEY(f),JSON.stringify(rows));}
@@ -151,10 +151,15 @@ var REQUIRED={
   inventory:['platform','internal_sku','stock_on_hand'],
   competitors:['platform','competitor','product'],
   cost:['internal_sku','unit_cost'],
+  returns:['platform','internal_sku','units_returned'],
+  listing:['platform','internal_sku'],
+  keyword_volume:['platform','keyword'],
+  festivals:['date','name'],
   keywords:['keyword','platform'],
   cities:['city']
 };
-var FEED_LABEL={sales:'Sales',skus:'SKUs',ads:'Ads',rank:'Keyword rank',reviews:'Reviews',inventory:'Inventory',competitors:'Competitors',cost:'Cost',keywords:'Keywords',cities:'Cities'};
+var FEED_LABEL={sales:'Sales',skus:'SKUs',ads:'Ads',rank:'Keyword rank',reviews:'Reviews',inventory:'Inventory',competitors:'Competitors',cost:'Cost',returns:'Returns',listing:'Listings',keyword_volume:'Keyword volume',festivals:'Festivals',keywords:'Keywords',cities:'Cities'};
+var MARKER_LABEL={'__bundles__':'bundle mapping','__price_history__':'price + conversion history','__inventory_age__':'inventory received-date','__competitor_listing__':'competitor listing snapshots','__listing__':'listing'};
 
 /* ============ csv ============ */
 function parseCSV(text){
@@ -217,6 +222,12 @@ function rNote(t){return'<div class="note">'+esc(t)+'</div>';}
 
 /* ============ the question registry ============ */
 /* each: {dom, q, needs:[feeds], run:()=>{html}}  run returns null to show "no data" */
+function themeList(theme){
+  var neg=(D.reviews||[]).filter(function(r){return num(r,'rating')<=3;});
+  var kws=THEMES[theme]||[];
+  var rows=neg.filter(function(r){var t=(r.review_text||'').toLowerCase();return kws.some(function(w){return t.indexOf(w)>=0;});}).map(function(r){return[esc(name(r.internal_sku)),'★'+r.rating,esc((r.review_text||'').slice(0,64))];});
+  return rows.length?rTable(['Product','Rating','Mention'],rows):rNote('No reviews mention '+theme.toLowerCase()+' issues. 👍');
+}
 var REG=[
 /* ---- SALES ---- */
 {dom:'Sales',q:'Highest revenue products',needs:['sales'],run:function(){
@@ -360,7 +371,123 @@ var REG=[
   return rows.length?rTable(['Product','Days left'],rows.map(function(x){return[esc(name(x.k)),'<span class="down">'+x.cover.toFixed(0)+'d</span>'];})):rNote('Nothing runs out within 10 days. 👍');}},
 
 /* ---- CONTENT (honest gap) ---- */
-{dom:'Content',q:'Listing image / title / CTR quality',needs:['__listing__'],run:function(){return null;}}
+/* ===== added: add-a-feed questions ===== */
+{dom:'Sales',q:'Products trending this week',needs:['sales'],run:function(){
+  var g=growth(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'revenue');});if(!g)return null;
+  var t=g.filter(function(x){return x.prev>0&&x.pct>0.1;}).sort(function(a,b){return b.pct-a.pct;}).slice(0,5);
+  return t.length?rTable(['Product','Momentum','Recent'],t.map(function(x){return['<span class="up">'+esc(name(x.k))+'</span>',pctS(x.pct),inrS(x.recent)];})):rNote('No strong upward momentum this period.');}},
+{dom:'Sales',q:'New products gaining traction',needs:['sales'],run:function(){
+  var P=splitPeriods(D.sales);if(!P.ok)return null;var prev=new Set(P.previous.map(function(r){return r.internal_sku;}));
+  var m=sorted(groupSum(P.recent.filter(function(r){return!prev.has(r.internal_sku);}),function(r){return r.internal_sku;},function(r){return num(r,'revenue');}));
+  return m.length?rTable(['New product','Recent revenue'],m.map(function(x){return[esc(name(x.k)),inr(x.v)];})):rNote('No brand-new SKUs started selling this period.');}},
+{dom:'Sales',q:'Seasonal products',needs:['sales'],run:function(){
+  var months=new Set((D.sales||[]).map(function(r){return r.date&&r.date.slice(0,7);}).filter(Boolean));
+  if(months.size<3)return rNote('Need ≥3 months of history — builds automatically as you upload monthly.');
+  var bm={};D.sales.forEach(function(r){if(!r.date)return;var mo=r.date.slice(0,7),k=r.internal_sku;(bm[k]=bm[k]||{})[mo]=(bm[k][mo]||0)+num(r,'revenue');});
+  var rows=Object.keys(bm).map(function(k){var v=Object.keys(bm[k]).map(function(m){return bm[k][m];});var mean=v.reduce(function(a,b){return a+b;},0)/v.length;var sd=Math.sqrt(v.reduce(function(a,b){return a+(b-mean)*(b-mean);},0)/v.length);return[esc(name(k)),(mean>0?(sd/mean*100):0).toFixed(0)+'%'];});
+  return rTable(['Product','Seasonality (variation)'],rows);}},
+{dom:'Sales',q:'Which bundles perform best',needs:['__bundles__'],run:function(){return null;}},
+{dom:'Marketplace',q:'Highest conversion platform',needs:['ads'],run:function(){
+  var b={};D.ads.forEach(function(r){var o=b[r.platform]=b[r.platform]||{clk:0,s:0};o.clk+=num(r,'clicks');o.s+=num(r,'attributed_sales');});
+  return rTable(['Platform','₹ / click'],Object.keys(b).map(function(p){return{p:p,c:b[p].clk>0?b[p].s/b[p].clk:0};}).sort(function(a,b2){return b2.c-a.c;}).map(function(x){return[esc(x.p),inr(x.c)];}));}},
+{dom:'Marketplace',q:'Highest return rate platform',needs:['returns','sales'],run:function(){
+  var sold=groupSum(D.sales,function(r){return r.platform;},function(r){return num(r,'units');});var ret=groupSum(D.returns,function(r){return r.platform;},function(r){return num(r,'units_returned');});
+  return rTable(['Platform','Return rate'],Object.keys(sold).map(function(p){return{p:p,r:sold[p]>0?(ret[p]||0)/sold[p]:0};}).sort(function(a,b){return b.r-a.r;}).map(function(x){return[esc(x.p),(x.r*100).toFixed(1)+'%'];}));}},
+{dom:'Marketplace',q:'Lowest customer ratings by platform',needs:['reviews'],run:function(){
+  var b={};D.reviews.forEach(function(r){(b[r.platform]=b[r.platform]||[]).push(num(r,'rating'));});
+  return rTable(['Platform','Avg ★'],Object.keys(b).map(function(p){return{p:p,a:b[p].reduce(function(x,y){return x+y;},0)/b[p].length};}).sort(function(a,b2){return a.a-b2.a;}).map(function(x){return[esc(x.p),x.a.toFixed(2)];}));}},
+{dom:'Geographic',q:'Where to expand inventory',needs:['sales'],run:function(){
+  var g=growth(D.sales,function(r){return r.city;},function(r){return num(r,'revenue');});if(!g)return null;
+  var rows=g.filter(function(x){return x.pct>0;}).sort(function(a,b){return b.pct-a.pct;}).slice(0,5);
+  return rows.length?rTable(['City','Growth','Recent'],rows.map(function(x){return['<span class="up">'+esc(x.k)+'</span>',pctS(x.pct),inrS(x.recent)];})):rNote('No cities growing this period.');}},
+{dom:'Customer',q:'Reviews mentioning quality issues',needs:['reviews'],run:function(){return themeList('Quality');}},
+{dom:'Customer',q:'Reviews mentioning packaging issues',needs:['reviews'],run:function(){return themeList('Packaging');}},
+{dom:'Customer',q:'Reviews mentioning delivery issues',needs:['reviews'],run:function(){return themeList('Delivery');}},
+{dom:'Customer',q:'Improving vs declining ratings',needs:['reviews'],run:function(){
+  var P=splitPeriods(D.reviews);if(!P.ok)return rNote('Need reviews spanning two periods.');
+  function av(rows){var m={};rows.forEach(function(r){(m[r.internal_sku]=m[r.internal_sku]||[]).push(num(r,'rating'));});var o={};Object.keys(m).forEach(function(k){o[k]=m[k].reduce(function(a,b){return a+b;},0)/m[k].length;});return o;}
+  var a=av(P.recent),b=av(P.previous);
+  var rows=Object.keys(a).filter(function(k){return b[k]!==undefined;}).map(function(k){return{k:k,d:a[k]-b[k],now:a[k]};}).sort(function(x,y){return y.d-x.d;});
+  return rows.length?rTable(['Product','Was → Now','Trend'],rows.map(function(x){return[esc(name(x.k)),(x.now-x.d).toFixed(1)+' → '+x.now.toFixed(1),x.d>=0?'<span class="up">▲</span>':'<span class="down">▼</span>'];})):rNote('No products with reviews in both periods.');}},
+{dom:'Customer',q:'Most requested features',needs:['reviews'],run:function(){
+  var reqs=['bigger','larger','smaller','resealable','lid','more colours','bulk','refill','wish','please add','would like'];var h={};
+  D.reviews.forEach(function(r){var t=(r.review_text||'').toLowerCase();reqs.forEach(function(w){if(t.indexOf(w)>=0)h[w]=(h[w]||0)+1;});});
+  var rows=sorted(h);return rows.length?rBars(rows.map(function(x){return{label:'“'+x.k+'”',v:x.v,disp:String(x.v)};})):rNote('No feature-request phrases found in review_text.');}},
+{dom:'Keywords',q:'Highest-volume keywords',needs:['keyword_volume'],run:function(){
+  return rBars(D.keyword_volume.map(function(r){return{k:r.keyword,v:num(r,'volume_index')};}).sort(function(a,b){return b.v-a.v;}).slice(0,10).map(function(x){return{label:x.k,v:x.v,disp:x.v.toFixed(0)};}));}},
+{dom:'Keywords',q:'Low-competition, high-volume keywords',needs:['keyword_volume'],run:function(){
+  var rows=D.keyword_volume.map(function(r){return{k:r.keyword,vol:num(r,'volume_index'),comp:num(r,'competition')};}).filter(function(x){return x.vol>40&&x.comp<40;}).sort(function(a,b){return(b.vol-b.comp)-(a.vol-a.comp);}).slice(0,8);
+  return rows.length?rTable(['Keyword','Volume','Competition'],rows.map(function(x){return[esc(x.k),x.vol.toFixed(0),'<span class="up">'+x.comp.toFixed(0)+'</span>'];})):rNote('No low-competition high-volume gaps in the data.');}},
+{dom:'Keywords',q:'Emerging keywords (rising volume)',needs:['keyword_volume'],run:function(){
+  var rows=D.keyword_volume.filter(function(r){return num(r,'trend')>0;}).map(function(r){return{k:r.keyword,t:num(r,'trend'),v:num(r,'volume_index')};}).sort(function(a,b){return b.t-a.t;}).slice(0,8);
+  return rows.length?rTable(['Keyword','Trend','Volume'],rows.map(function(x){return[esc(x.k),'<span class="up">▲ '+x.t.toFixed(0)+'%</span>',x.v.toFixed(0)];})):rNote('No rising keywords flagged (set trend>0 in the feed).');}},
+{dom:'Keywords',q:'Competitor keywords to target',needs:['keyword_volume','rank'],run:function(){
+  var best={};D.rank.forEach(function(r){var k=r.keyword,v=num(r,'rank');if(!(k in best)||v<best[k])best[k]=v;});
+  var rows=D.keyword_volume.map(function(r){return{k:r.keyword,vol:num(r,'volume_index'),rank:best[r.keyword]};}).filter(function(x){return x.vol>40&&(x.rank===undefined||x.rank>8);}).sort(function(a,b){return b.vol-a.vol;}).slice(0,8);
+  return rows.length?rTable(['Keyword','Volume','Your rank'],rows.map(function(x){return[esc(x.k),x.vol.toFixed(0),x.rank===undefined?'<span class="down">absent</span>':'<span class="down">#'+Math.round(x.rank)+'</span>'];})):rNote('You already rank for the high-volume keywords. 👍');}},
+{dom:'Advertising',q:'Highest CPC keywords',needs:['ads'],run:function(){
+  var b={};D.ads.forEach(function(r){if(!r.keyword)return;var o=b[r.keyword]=b[r.keyword]||{sp:0,clk:0};o.sp+=num(r,'spend');o.clk+=num(r,'clicks');});
+  return rTable(['Keyword','CPC'],Object.keys(b).map(function(k){return{k:k,c:b[k].clk>0?b[k].sp/b[k].clk:0};}).sort(function(a,b2){return b2.c-a.c;}).slice(0,8).map(function(x){return[esc(x.k),inr(x.c)];}));}},
+{dom:'Advertising',q:'Poor-CTR listings (ad click-through)',needs:['ads'],run:function(){
+  var b={};D.ads.forEach(function(r){if(!r.internal_sku)return;var o=b[r.internal_sku]=b[r.internal_sku]||{i:0,c:0};o.i+=num(r,'impressions');o.c+=num(r,'clicks');});
+  return rTable(['Product','Ad CTR'],Object.keys(b).map(function(k){return{k:k,ctr:b[k].i>0?b[k].c/b[k].i:0};}).sort(function(a,b2){return a.ctr-b2.ctr;}).slice(0,8).map(function(x){return[esc(name(x.k)),(x.ctr*100).toFixed(1)+'%'];}));}},
+{dom:'Pricing',q:'Potentially overpriced products',needs:['competitors','sales'],run:function(){
+  var rev=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'revenue');}),un=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'units');});
+  var cp=D.competitors.map(function(r){return num(r,'price');}).filter(function(x){return x>0;}).sort(function(a,b){return a-b;});var med=cp[Math.floor(cp.length/2)]||0;
+  var rows=Object.keys(rev).map(function(k){return{k:k,p:un[k]>0?rev[k]/un[k]:0};}).filter(function(x){return med>0&&x.p>med*1.15;}).map(function(x){return[esc(name(x.k)),inr(x.p),inr(med),'<span class="down">+'+(((x.p/med)-1)*100).toFixed(0)+'%</span>'];});
+  return rows.length?rTable(['Product','Your price','Competitor median','Gap'],rows):rNote('Your prices are in line with competitors. 👍');}},
+{dom:'Pricing',q:'How discounts affect conversion',needs:['__price_history__'],run:function(){return null;}},
+{dom:'Inventory',q:'Warehouses that stock out most',needs:['inventory'],run:function(){
+  var b={};D.inventory.forEach(function(r){var w=r.warehouse||r.platform;b[w]=b[w]||{z:0};if(num(r,'stock_on_hand')<=0)b[w].z++;});
+  var rows=Object.keys(b).map(function(w){return{w:w,z:b[w].z};}).filter(function(x){return x.z>0;}).sort(function(a,b2){return b2.z-a.z;});
+  return rows.length?rTable(['Warehouse','Stockout rows'],rows.map(function(x){return[esc(x.w),String(x.z)];})):rNote('No warehouse stockouts in the data. 👍');}},
+{dom:'Inventory',q:'Inventory to transfer between warehouses',needs:['inventory','sales'],run:function(){
+  var latest={};D.inventory.forEach(function(r){var k=r.internal_sku,w=r.warehouse||r.platform;(latest[k]=latest[k]||{})[w]=num(r,'stock_on_hand');});
+  var rows=[];Object.keys(latest).forEach(function(k){var ws=latest[k],whs=Object.keys(ws);var low=whs.filter(function(w){return ws[w]<=0;}),high=whs.filter(function(w){return ws[w]>velocityPerDay(k)*30;});if(low.length&&high.length)rows.push([esc(name(k)),esc(high[0])+' → '+esc(low[0])]);});
+  return rows.length?rTable(['Product','Suggested transfer'],rows):rNote('No transfer opportunities (need one stocked-out and one overstocked warehouse for the same SKU).');}},
+{dom:'Inventory',q:'Aging inventory',needs:['__inventory_age__'],run:function(){return null;}},
+{dom:'Competitors',q:'Competitors introducing bundle packs',needs:['competitors'],run:function(){
+  var rows=D.competitors.filter(function(r){return/pack|combo|bundle|set/i.test(r.product||'');}).map(function(r){return[esc(r.competitor),esc(r.product),r.price?inr(num(r,'price')):'—'];});
+  return rows.length?rTable(['Competitor','Bundle','Price'],rows):rNote('No competitor bundles detected.');}},
+{dom:'Competitors',q:'Competitors running ads',needs:['competitors'],run:function(){
+  if(!D.competitors.some(function(r){return'sponsored' in r;}))return rNote('Add a “sponsored” column (true/false) to the competitors feed to track this.');
+  var rows=D.competitors.filter(function(r){return(r.sponsored||'').toLowerCase()==='true';}).map(function(r){return[esc(r.competitor),esc(r.product),esc(r.platform)];});
+  return rows.length?rTable(['Competitor','Product','Platform'],rows):rNote('No competitor sponsored placements flagged.');}},
+{dom:'Competitors',q:'Competitor image / title / A+ changes',needs:['__competitor_listing__'],run:function(){return null;}},
+{dom:'Content',q:'Listings with poor images',needs:['listing'],run:function(){
+  var rows=D.listing.filter(function(r){return num(r,'image_count')<3;}).map(function(r){return[esc(name(r.internal_sku)),num(r,'image_count')+' images','<span class="down">add more</span>'];});
+  return rows.length?rTable(['Product','Images','Fix'],rows):rNote('All listings have ≥3 images. 👍');}},
+{dom:'Content',q:'Listings missing attributes',needs:['listing'],run:function(){
+  var rows=D.listing.filter(function(r){var a=(r.attributes_missing||'').trim().toLowerCase();return a!==''&&a!=='none'&&a!=='0';}).map(function(r){return[esc(name(r.internal_sku)),esc(r.attributes_missing)];});
+  return rows.length?rTable(['Product','Missing attributes'],rows):rNote('No missing attributes flagged. 👍');}},
+{dom:'Content',q:'Listings without A+ content',needs:['listing'],run:function(){
+  var rows=D.listing.filter(function(r){var a=(r.has_aplus||'').toLowerCase();return a!=='true'&&a!=='yes';}).map(function(r){return[esc(name(r.internal_sku)),'<span class="down">no A+ content</span>'];});
+  return rows.length?rTable(['Product','A+ status'],rows):rNote('All listings have A+ content. 👍');}},
+{dom:'Content',q:'Listings needing SEO (short titles)',needs:['listing'],run:function(){
+  var rows=D.listing.filter(function(r){return(r.title||'').length<40;}).map(function(r){return[esc(name(r.internal_sku)),(r.title||'').length+' chars','<span class="down">expand + add keywords</span>'];});
+  return rows.length?rTable(['Product','Title length','Fix'],rows):rNote('Titles are adequately long. Cross-check against high-volume keywords.');}},
+{dom:'Profitability',q:'SKUs to discontinue (low margin + declining)',needs:['sales','cost'],run:function(){
+  var g=growth(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'revenue');});var gm={};(g||[]).forEach(function(x){gm[x.k]=x.pct;});
+  var rev=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'revenue');}),un=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'units');}),ad=groupSum((D.ads||[]).filter(function(r){return r.internal_sku;}),function(r){return r.internal_sku;},function(r){return num(r,'spend');});
+  var cm={};D.cost.forEach(function(c){cm[c.internal_sku]={uc:num(c,'unit_cost'),fee:num(c,'platform_fee_pct')/100};});
+  var rows=Object.keys(rev).map(function(k){var c=cm[k]||{uc:0,fee:0};var m=rev[k]-un[k]*c.uc-rev[k]*c.fee-(ad[k]||0);return{k:k,pct:rev[k]>0?m/rev[k]:0,g:gm[k]||0};}).filter(function(x){return x.pct<0.1&&x.g<0;}).sort(function(a,b){return a.pct-b.pct;});
+  return rows.length?rTable(['Product','Margin %','Growth'],rows.map(function(x){return[esc(name(x.k)),'<span class="down">'+(x.pct*100).toFixed(0)+'%</span>','<span class="down">'+pctS(x.g)+'</span>'];})):rNote('Nothing is both low-margin and shrinking. 👍');}},
+{dom:'Profitability',q:'Products deserving more investment',needs:['sales','cost'],run:function(){
+  var g=growth(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'revenue');});var gm={};(g||[]).forEach(function(x){gm[x.k]=x.pct;});
+  var rev=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'revenue');}),un=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'units');}),ad=groupSum((D.ads||[]).filter(function(r){return r.internal_sku;}),function(r){return r.internal_sku;},function(r){return num(r,'spend');});
+  var cm={};D.cost.forEach(function(c){cm[c.internal_sku]={uc:num(c,'unit_cost'),fee:num(c,'platform_fee_pct')/100};});
+  var rows=Object.keys(rev).map(function(k){var c=cm[k]||{uc:0,fee:0};var m=rev[k]-un[k]*c.uc-rev[k]*c.fee-(ad[k]||0);return{k:k,pct:rev[k]>0?m/rev[k]:0,g:gm[k]||0};}).filter(function(x){return x.pct>0.2&&x.g>0;}).sort(function(a,b){return b.pct-a.pct;});
+  return rows.length?rTable(['Product','Margin %','Growth'],rows.map(function(x){return[esc(name(x.k)),'<span class="up">'+(x.pct*100).toFixed(0)+'%</span>','<span class="up">'+pctS(x.g)+'</span>'];})):rNote('No standout invest-more candidates this period.');}},
+{dom:'Forecast',q:'Cities that will see higher demand',needs:['sales'],run:function(){
+  var g=growth(D.sales,function(r){return r.city;},function(r){return num(r,'revenue');});if(!g)return null;
+  var rows=g.filter(function(x){return x.pct>0;}).sort(function(a,b){return b.pct-a.pct;}).slice(0,5).map(function(x){return[esc(x.k),pctS(x.pct),inrS(x.recent+(x.recent-x.prev))];});
+  return rows.length?rTable(['City','Trend','Projected next'],rows):rNote('No cities trending up.');}},
+{dom:'Forecast',q:'Festivals that will impact sales',needs:['festivals'],run:function(){
+  var today=dataDate();var rows=D.festivals.filter(function(r){return!today||r.date>=today;}).sort(function(a,b){return a.date.localeCompare(b.date);}).slice(0,8).map(function(r){return[esc(r.name),esc(r.date),r.lift_pct?'<span class="up">+'+num(r,'lift_pct')+'%</span>':'—'];});
+  return rows.length?rTable(['Festival','Date','Expected lift'],rows):rNote('No upcoming festivals in the calendar feed.');}},
+{dom:'Forecast',q:'Keywords expected to trend',needs:['keyword_volume'],run:function(){
+  var rows=D.keyword_volume.filter(function(r){return num(r,'trend')>0;}).sort(function(a,b){return num(b,'trend')-num(a,'trend');}).slice(0,6).map(function(r){return[esc(r.keyword),'<span class="up">▲ '+num(r,'trend').toFixed(0)+'%</span>'];});
+  return rows.length?rTable(['Keyword','Projected trend'],rows):rNote('No rising keywords flagged.');}}
 ];
 
 /* margin + theme helpers used above */
@@ -495,7 +622,7 @@ function renderDomain(dom){
   var qs=REG.filter(function(x){return x.dom===dom;});
   body.innerHTML=qs.map(function(x){
     var head='<div class="qh">'+esc(x.q);
-    if(!feedsReady(x.needs)){var missing=x.needs.map(function(f){return f.indexOf('__')===0?'listing feed':FEED_LABEL[f];});return'<div class="qblock">'+head+'<span class="needs">needs '+missing.join(' + ')+'</span></div><div class="card">'+rNote('Upload the '+missing.join(' + ')+' feed to answer this.')+'</div></div>';}
+    if(!feedsReady(x.needs)){var missing=x.needs.map(function(f){return f.indexOf('__')===0?(MARKER_LABEL[f]||'extra data'):FEED_LABEL[f];});return'<div class="qblock">'+head+'<span class="needs">needs '+missing.join(' + ')+'</span></div><div class="card">'+rNote('Upload the '+missing.join(' + ')+' feed to answer this.')+'</div></div>';}
     head+='</div>';var res=x.run();
     return'<div class="qblock">'+head+'<div class="card">'+(res||rNote('Not enough data yet (need at least two periods).'))+'</div></div>';
   }).join('');
@@ -523,12 +650,12 @@ function kpi(l,v,d){return'<div class="kpi"><div class="eyebrow">'+l+'</div><div
 /* ============ setup / upload ============ */
 function renderSetup(){
   loadAll();
-  document.getElementById('tplRow').innerHTML=['sales','skus','ads','rank','reviews','inventory','competitors','cost'].map(function(f){return'<button class="btn" data-tpl="'+f+'">'+FEED_LABEL[f]+'</button>';}).join('');
-  document.getElementById('feedGrid').innerHTML=['sales','skus','ads','rank','reviews','inventory','competitors','cost'].map(function(f){
+  document.getElementById('tplRow').innerHTML=['sales','skus','ads','rank','reviews','inventory','competitors','cost','returns','listing','keyword_volume','festivals'].map(function(f){return'<button class="btn" data-tpl="'+f+'">'+FEED_LABEL[f]+'</button>';}).join('');
+  document.getElementById('feedGrid').innerHTML=['sales','skus','ads','rank','reviews','inventory','competitors','cost','returns','listing','keyword_volume','festivals'].map(function(f){
     var n=(D[f]||[]).length;return'<div class="feed"><span class="lbl">'+FEED_LABEL[f]+'</span><span><label>upload<input type="file" accept=".csv" data-up="'+f+'"></label> <span class="st'+(n?' ok':'')+'" id="st-'+f+'">'+(n?n+' rows':'—')+'</span></span></div>';}).join('');
   document.querySelectorAll('[data-tpl]').forEach(function(b){b.addEventListener('click',function(){download(b.dataset.tpl+'.csv',TEMPLATES[b.dataset.tpl]);});});
   document.querySelectorAll('[data-up]').forEach(function(inp){inp.addEventListener('change',function(){if(inp.files[0])handleUpload(inp.dataset.up,inp.files[0]);});});
-  var order=['sales','skus','ads','rank','reviews','inventory','competitors','cost'];
+  var order=['sales','skus','ads','rank','reviews','inventory','competitors','cost','returns','listing','keyword_volume','festivals'];
   document.getElementById('statusCard').innerHTML=order.map(function(f){var rows=D[f]||[];var extra='';if(f==='sales'&&rows.length){var d=rows.map(function(r){return r.date;}).filter(Boolean).sort();if(d.length)extra=' · '+d[0]+' → '+d[d.length-1];}return'<div class="bar-row" style="grid-template-columns:1fr auto"><span class="name">'+FEED_LABEL[f]+'</span><span class="num" style="color:'+(rows.length?'var(--good)':'var(--text-faint)')+'">'+(rows.length?rows.length+' rows'+extra:'not loaded')+'</span></div>';}).join('');
 }
 function handleUpload(kind,file){
@@ -548,8 +675,12 @@ var TEMPLATES={
   rank:'date,platform,keyword,internal_sku,city,rank\n2026-07-20,Blinkit,eco friendly plates,PKA-PLT-10,Delhi,3\n',
   reviews:'date,platform,internal_sku,rating,review_text\n2026-07-20,Blinkit,PKA-CUT-WD,2,"cutlery box was crushed, forks broke"\n',
   inventory:'date,platform,internal_sku,warehouse,stock_on_hand\n2026-07-20,Blinkit,PKA-PLT-10,Delhi-DC,900\n',
-  competitors:'date,platform,competitor,product,price,rating,is_new\n2026-07-20,Zepto,EcoWare,Bamboo Bowl 500ml,199,4.2,true\n',
-  cost:'internal_sku,unit_cost,platform_fee_pct\nPKA-PLT-10,72,22\n'
+  competitors:'date,platform,competitor,product,price,rating,is_new,sponsored\n2026-07-20,Zepto,EcoWare,Bamboo Bowl 500ml,199,4.2,true,false\n',
+  cost:'internal_sku,unit_cost,platform_fee_pct\nPKA-PLT-10,72,22\n',
+  returns:'date,platform,internal_sku,units_returned\n2026-07-20,Blinkit,PKA-CUT-WD,6\n',
+  listing:'platform,internal_sku,image_count,title,has_aplus,attributes_missing\nBlinkit,PKA-CUP-250,2,Kraft Paper Cup 250ml,false,material\n',
+  keyword_volume:'platform,keyword,volume_index,competition,trend\nBlinkit,eco friendly plates,82,64,5\n',
+  festivals:'date,name,lift_pct,category\n2026-08-15,Independence Day,20,Plates\n'
 };
 
 /* ============ full sample (all feeds, 30 days) ============ */
@@ -609,7 +740,34 @@ function buildSample(){
     {internal_sku:'PKA-CUT-WD',unit_cost:'130',platform_fee_pct:'22'},
     {internal_sku:'PKA-CLM-750',unit_cost:'104',platform_fee_pct:'20'}
   ];
-  return{sales:sales,skus:skus,ads:ads,rank:rank,reviews:reviews,inventory:inventory,competitors:competitors,cost:cost};
+  var returns=[
+    {date:'2026-07-18',platform:'Blinkit',internal_sku:'PKA-CUT-WD',units_returned:'14'},
+    {date:'2026-07-19',platform:'Zepto',internal_sku:'PKA-CUT-WD',units_returned:'9'},
+    {date:'2026-07-17',platform:'Amazon Now',internal_sku:'PKA-CUP-250',units_returned:'5'},
+    {date:'2026-07-20',platform:'Blinkit',internal_sku:'PKA-PLT-10',units_returned:'3'}
+  ];
+  var listing=[
+    {platform:'Blinkit',internal_sku:'PKA-PLT-10',image_count:'5',title:'Pakka Bagasse Eco Friendly Disposable Plates 10 inch (25 pcs)',has_aplus:'true',attributes_missing:'none'},
+    {platform:'Zepto',internal_sku:'PKA-CUP-250',image_count:'2',title:'Paper Cup 250ml',has_aplus:'false',attributes_missing:'material, capacity'},
+    {platform:'Amazon Now',internal_sku:'PKA-TRY-3CP',image_count:'3',title:'Bagasse Meal Tray',has_aplus:'false',attributes_missing:'compartments'},
+    {platform:'Blinkit',internal_sku:'PKA-CUT-WD',image_count:'1',title:'Wooden Cutlery Set',has_aplus:'false',attributes_missing:'pack size, material'},
+    {platform:'Amazon Now',internal_sku:'PKA-CLM-750',image_count:'6',title:'Pakka Sugarcane Bagasse Clamshell 750ml Leak Proof Compostable Container',has_aplus:'true',attributes_missing:'none'}
+  ];
+  var keyword_volume=[
+    {platform:'Blinkit',keyword:'eco friendly plates',volume_index:'82',competition:'64',trend:'4'},
+    {platform:'Zepto',keyword:'disposable meal tray',volume_index:'71',competition:'58',trend:'-3'},
+    {platform:'Zepto',keyword:'paper cups 250ml',volume_index:'66',competition:'40',trend:'2'},
+    {platform:'Instamart',keyword:'compostable straws',volume_index:'44',competition:'22',trend:'38'},
+    {platform:'Amazon Now',keyword:'bamboo dinner plates',volume_index:'59',competition:'31',trend:'12'},
+    {platform:'Blinkit',keyword:'bulk paper cups',volume_index:'48',competition:'28',trend:'9'},
+    {platform:'Amazon Now',keyword:'sugarcane clamshell',volume_index:'52',competition:'35',trend:'6'}
+  ];
+  var festivals=[
+    {date:'2026-08-15',name:'Independence Day',lift_pct:'18',category:'Plates'},
+    {date:'2026-08-27',name:'Ganesh Chaturthi',lift_pct:'32',category:'Trays'},
+    {date:'2026-10-20',name:'Diwali',lift_pct:'55',category:'All'}
+  ];
+  return{sales:sales,skus:skus,ads:ads,rank:rank,reviews:reviews,inventory:inventory,competitors:competitors,cost:cost,returns:returns,listing:listing,keyword_volume:keyword_volume,festivals:festivals};
 }
 
 /* ============ view switch + wiring ============ */
