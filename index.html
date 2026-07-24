@@ -125,7 +125,7 @@
 
 <div id="view-setup" class="hidden">
   <main style="max-width:1120px;margin:0 auto;padding:24px 20px 64px">
-    <div style="margin-bottom:20px"><h1>Upload data — once a month</h1><div class="subtle">Drop each export below. Every feed you add unlocks more of the dashboard. Missing feeds are labelled, not broken.</div></div>
+    <div style="margin-bottom:20px"><h1>Upload data — once a month</h1><div class="subtle">Any CSV committed to the repo <code>data/</code> folder <b>loads automatically</b> on open — the monthly cron already does this for keyword data. Manual upload below is only for feeds you don't automate.</div></div>
     <div class="steps">
       <div class="step"><div class="n">STEP 1</div><h3>Templates</h3><p>Download, fill with your monthly export, keep headers exact.</p><div class="btn-row" id="tplRow"></div></div>
       <div class="step"><div class="n">STEP 2</div><h3>Upload</h3><p>Sales is the minimum. Add ads, rank, reviews, inventory, competitors and cost to unlock the rest.</p><div class="feedgrid" id="feedGrid"></div></div>
@@ -140,6 +140,8 @@
 <script>
 /* ============ feeds & storage ============ */
 var FEEDS=['sales','skus','ads','rank','reviews','inventory','competitors','cost','returns','listing','keyword_volume','festivals','keywords','cities'];
+// Auto-sync: any CSV committed to the repo's data/ folder loads on open — no manual upload.
+var REPO_DATA_BASE='https://raw.githubusercontent.com/daWanderbee/qcomm/master/data';
 var KEY=function(f){return 'qcomm_'+f;};
 function load(f){try{return JSON.parse(localStorage.getItem(KEY(f))||'[]');}catch(e){return[];}}
 function save(f,rows){localStorage.setItem(KEY(f),JSON.stringify(rows));}
@@ -876,6 +878,21 @@ document.getElementById('domBody').addEventListener('click',function(e){
   else if(t.id==='genSeeds'){var kws=seedKeywords();var csv='platform,keyword,ad_impressions,autocomplete_rank,amazon_sqp_rank,google_volume,competition\n'+kws.map(function(k){return ',"'+String(k).replace(/"/g,'""')+'",,,,,';}).join('\n')+'\n';download('keyword_seeds.csv',csv);toast(kws.length+' seed keywords downloaded');}
 });
 loadAll();renderNav('Overview');renderDomain('Overview');
+
+/* Auto-load any feed CSV committed to the repo data/ folder (zero manual upload). */
+function syncFromRepo(){
+  if(typeof location==='undefined'||typeof fetch==='undefined'||!/^https?:$/.test(location.protocol))return; // skip on file:// / non-browser
+  Promise.all(FEEDS.map(function(f){
+    return fetch(REPO_DATA_BASE+'/'+f+'.csv',{cache:'no-store'})
+      .then(function(r){return r.ok?r.text():null;})
+      .then(function(txt){if(!txt)return null;var rows=parseCSV(txt);if(!rows.length||validate(f,rows))return null;save(f,rows);return f;})
+      .catch(function(){return null;});
+  })).then(function(res){
+    var loaded=res.filter(Boolean);
+    if(loaded.length){loadAll();measureOutcomes();var cur=document.querySelector('.domlink.active');renderDomain(cur?cur.getAttribute('data-dom'):'Overview');toast('Synced '+loaded.length+' feed(s) from repo');}
+  });
+}
+syncFromRepo();
 
 /* ============ self-check (money path) ============ */
 (function(){

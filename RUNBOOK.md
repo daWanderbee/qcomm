@@ -1,7 +1,22 @@
 # Monthly Run Checklist
 
-Cadence: **1st of each month.** Total time ≈ 30–45 min. Keep the schema exact
-(see `README.md`); everything downstream depends on it.
+Cadence: **1st of each month.** Keep the schema exact (see `README.md`);
+everything downstream depends on it.
+
+## Least-work mode (≈10 min)
+The app **auto-loads any CSV in the repo `data/` folder** on open — no manual
+upload. So the goal each month is simply: *get the CSVs into `data/`, then open
+the dashboard.*
+
+- **Automatic (zero touch):** the monthly cron already commits `keyword_volume.csv`.
+  Add API-based collectors (Amazon/Flipkart/QCA) and those feeds refresh themselves too.
+- **Manual (the irreducible bit):** export the reports that sit behind a login
+  (own sales/ads/reviews for no-API portals), drop the files into `data/`, commit.
+- **Then:** open the app → it syncs → read **Recommendations**, mark last month's
+  actions done. That's it.
+
+The full checklist below is the thorough version; in steady state you only touch
+step 2 (export) and step 5 (act).
 
 ---
 
@@ -35,9 +50,10 @@ From each platform's seller/brand portal, export **last month**:
 - [ ] Rename each export's headers to match the app schema (README table).
 - [ ] Keep `internal_sku` consistent across every file (your `skus.csv` is the master).
 
-## 4 · Upload
-- [ ] App → **Upload data** → drop each CSV. Watch **Feed status** turn green.
-- [ ] Clear any "needs mapping" rows (unmatched SKUs) — one-time per SKU.
+## 4 · Get the data in (auto)
+- [ ] Commit your CSVs to the repo `data/` folder (`git add data/ && git commit && git push`).
+- [ ] Open the app — it **auto-syncs** from `data/` on load; no manual upload needed.
+      (Manual **Upload data** still works for one-off/local files.)
 
 ## 5 · Review, act, and let it learn
 - [ ] **Recommendations** tab: work this month's ranked action list, top-down.
