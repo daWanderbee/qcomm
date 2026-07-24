@@ -9,6 +9,10 @@ no database.
   you add unlocks more of the dashboard. Missing feeds are labelled, not broken.
 - **Dashboard** tab: a sidebar of intelligence domains, each showing its questions
   answered live from your data. The sidebar shows **ready/total** per domain.
+- **Ingestion** tab: what each feed provides, where it comes from, how it's brought
+  in (cron/API/rented/manual), and whether it's currently loaded.
+- **Keyword Volume** tab: per-app volume index → opportunity → action, with a
+  free discovery collector.
 - **Load full sample** to see one month of demo data light up every domain at once.
 
 Data is stored in the browser (localStorage). It stays on your machine.
@@ -53,14 +57,21 @@ It then ranks every keyword by opportunity and assigns an action (Bid up / Fix /
 Protect / Attack / Ride trend). Feed it via `keyword_volume.csv` — provide whatever
 signals you have; missing ones are simply down-weighted.
 
+Volume is scored **per app** — 100 = the top keyword on *that* marketplace, because
+Blinkit / Zepto / Amazon Now demand is not comparable on a single scale. The
+**Keyword Volume** tab has a per-app selector.
+
 ### Discover keywords (free, no keys)
 `tools/collect-keywords.mjs` expands seed terms via Google autocomplete and writes
-a ready-to-upload `keyword_volume.csv`:
+a ready-to-upload `keyword_volume.csv`. Use `--platforms` to emit rows for every
+app in a single fetch:
 
 ```
-node tools/collect-keywords.mjs "eco friendly plates" "paper cups" --platform Blinkit --depth 1 > keyword_volume.csv
+node tools/collect-keywords.mjs --seeds data/seeds.txt \
+  --platforms "Blinkit,Zepto,Instamart,Amazon Now,BigBasket,Flipkart Minutes" --depth 1 > keyword_volume.csv
 node tools/collect-keywords.mjs --self-test        # offline check
 ```
+(The monthly cron already runs exactly this for all six apps.)
 Autocomplete fills `autocomplete_rank` (a popularity/order signal). For **real**
 per-platform volume, add `ad_impressions` (your ad reports) and `amazon_sqp_rank`
 (Amazon Brand Analytics) columns before uploading. Platform-native autocomplete

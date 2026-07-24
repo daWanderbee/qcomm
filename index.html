@@ -163,6 +163,22 @@ var REQUIRED={
 };
 var FEED_LABEL={sales:'Sales',skus:'SKUs',ads:'Ads',rank:'Keyword rank',reviews:'Reviews',inventory:'Inventory',competitors:'Competitors',cost:'Cost',returns:'Returns',listing:'Listings',keyword_volume:'Keyword volume',festivals:'Festivals',keywords:'Keywords',cities:'Cities'};
 var MARKER_LABEL={'__bundles__':'bundle mapping','__price_history__':'price + conversion history','__inventory_age__':'inventory received-date','__competitor_listing__':'competitor listing snapshots','__listing__':'listing'};
+// What each feed is, where it comes from, and how it's ingested — shown on the Ingestion tab.
+var FEED_META={
+  sales:{provides:'Sales, Marketplace, Geographic',source:'Brand/seller portal — sales/orders report',via:'manual',cadence:'Monthly'},
+  ads:{provides:'Advertising, Keywords, Profitability',source:'Ad console — spend, impressions, clicks, attributed sales',via:'api',cadence:'Monthly'},
+  rank:{provides:'Keyword rankings',source:'Consumer-app scrape (rank = result position)',via:'rented',cadence:'Monthly / weekly'},
+  reviews:{provides:'Customer themes & rating trend',source:'Ratings/reviews export or scrape',via:'rented',cadence:'Monthly'},
+  inventory:{provides:'Inventory, stockout forecast',source:'WMS / platform stock report',via:'api',cadence:'Monthly / weekly'},
+  competitors:{provides:'Competitors, Pricing',source:'Consumer-app scrape (catalog snapshot)',via:'rented',cadence:'Monthly'},
+  cost:{provides:'Profitability (margin after ads)',source:'Your finance sheet — COGS + platform fee %',via:'manual',cadence:'On change'},
+  returns:{provides:'Marketplace return rate',source:'Returns report (Amazon/Flipkart)',via:'manual',cadence:'Monthly'},
+  listing:{provides:'Content — images, A+, attributes, SEO',source:'Listing audit or scrape',via:'rented',cadence:'Monthly'},
+  keyword_volume:{provides:'Keyword Volume engine',source:'Google autocomplete + ad reports + Amazon SQP',via:'auto',cadence:'Monthly (cron)'},
+  festivals:{provides:'Forecast — festival impact',source:'Festival calendar',via:'manual',cadence:'Yearly'},
+  skus:{provides:'Product names & categories (master)',source:'Your catalogue',via:'manual',cadence:'On change'}
+};
+var VIA_META={manual:['manual export','warn'],api:['official API','acc'],rented:['rented feed / scrape','acc'],auto:['cron · auto','protect'],config:['config','acc']};
 
 /* ============ csv ============ */
 function parseCSV(text){
@@ -238,16 +254,18 @@ function keywordEngine(){
     return{platform:r.platform,keyword:r.keyword,ad_imp:ai,sqp:num(r,'amazon_sqp_rank'),ac:num(r,'autocomplete_rank'),gv:num(r,'google_volume'),
       provided:num(r,'volume_index'),competition:num(r,'competition'),trendCol:(r.trend!==undefined?num(r,'trend'):null),
       prevIdx:(r.prev_volume_index!==undefined?num(r,'prev_volume_index'):null),rank:bestRank[r.keyword],ad:adAgg[r.keyword]};});
-  var maxImp=Math.max.apply(null,[1].concat(rows.map(function(x){return x.ad_imp;})));
-  var maxGv=Math.max.apply(null,[1].concat(rows.map(function(x){return x.gv;})));
+  // Normalise WITHIN each platform so "index 100" = top keyword on THAT app
+  // (marketplaces have different audiences & scales — never compare raw across apps).
+  var maxImp={},maxGv={};
+  rows.forEach(function(x){maxImp[x.platform]=Math.max(maxImp[x.platform]||1,x.ad_imp);maxGv[x.platform]=Math.max(maxGv[x.platform]||1,x.gv);});
   function acScore(r){return r>0?Math.max(0,105-r*5):0;}                 // suggestion pos 1 -> 100
   function sqpScore(r){return r>0?Math.max(0,100-Math.log(r)/Math.LN10*25):0;} // SQP rank 1->100, 100->50
   rows.forEach(function(x){
     var sig=[],conf='proxy';
-    if(x.ad_imp>0){sig.push([0.40,x.ad_imp/maxImp*100]);conf='high';}
+    if(x.ad_imp>0){sig.push([0.40,x.ad_imp/maxImp[x.platform]*100]);conf='high';}
     if(x.sqp>0){sig.push([0.30,sqpScore(x.sqp)]);conf='high';}
     if(x.ac>0){sig.push([0.20,acScore(x.ac)]);}
-    if(x.gv>0){sig.push([0.10,x.gv/maxGv*100]);}
+    if(x.gv>0){sig.push([0.10,x.gv/maxGv[x.platform]*100]);}
     var idx;
     if(sig.length){var ws=sig.reduce(function(a,b){return a+b[0];},0);idx=sig.reduce(function(a,b){return a+b[0]*b[1];},0)/ws;}
     else{idx=x.provided;conf=(x.sqp>0||x.ad_imp>0)?'high':'proxy';}
@@ -644,19 +662,60 @@ function renderLearning(body){
     (done?'<div style="margin-top:14px"><button class="btn ghost" id="resetLearn">Reset learning</button></div>':'');
 }
 
+function renderIngestion(body){
+  var order=['sales','ads','rank','reviews','inventory','competitors','cost','returns','listing','keyword_volume','festivals','skus'];
+  var loadedN=order.filter(function(f){return load(f).length;}).length;
+  var counts={};order.forEach(function(f){var m=FEED_META[f].via;counts[m]=(counts[m]||0)+1;});
+  var kpis='<div class="kpis">'+
+    kpi('Feeds loaded',loadedN+' / '+order.length,'')+
+    kpi('Auto (cron)',String(counts.auto||0),'')+
+    kpi('Via API',String(counts.api||0),'')+
+    kpi('Manual export',String(counts.manual||0),'')+'</div>';
+  var rows=order.map(function(f){
+    var meta=FEED_META[f],data=load(f),via=VIA_META[meta.via];
+    var status,extra='';
+    if(data.length){var d=data.map(function(r){return r.date;}).filter(Boolean).sort();if(d.length)extra=' · '+d[0]+'→'+d[d.length-1];
+      status='<span class="pill protect">'+data.length+' rows'+extra+'</span>';}
+    else status='<span class="pill warn">not loaded</span>';
+    return '<tr><td class="strong">'+FEED_LABEL[f]+'</td>'+
+      '<td>'+status+'</td>'+
+      '<td class="subtle" style="font-size:12.5px">'+esc(meta.provides)+'</td>'+
+      '<td class="subtle" style="font-size:12.5px">'+esc(meta.source)+'</td>'+
+      '<td><span class="pill '+via[1]+'">'+via[0]+'</span></td>'+
+      '<td class="subtle num" style="font-size:12px">'+esc(meta.cadence)+'</td></tr>';
+  }).join('');
+  body.innerHTML=kpis+
+    '<div class="card note" style="margin-bottom:14px">Anything committed to the repo <code>data/</code> folder <b>auto-loads on open</b> — no upload. The monthly cron already refreshes <b>keyword volume</b>. Recommended split: <b>APIs</b> for Amazon/Flipkart, a <b>rented feed</b> for competitor/rank, <b>manual export</b> for the login-only reports.</div>'+
+    '<div class="sec-head"><h2>Data we ingest</h2><span class="meta">'+loadedN+' of '+order.length+' feeds loaded</span></div>'+
+    '<div class="card table-wrap"><table><thead><tr><th>Feed</th><th>Status</th><th>Unlocks</th><th>Source</th><th>How</th><th>Cadence</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="card" style="padding:14px 16px;margin-top:14px;font-size:12.5px;color:var(--text-dim)">'+
+      '<b>Legend —</b> '+
+      '<span class="pill protect">cron · auto</span> runs itself · '+
+      '<span class="pill acc">official API / rented</span> keys or subscription · '+
+      '<span class="pill warn">manual export</span> the login-only bit you drop into <code>data/</code>.'+
+    '</div>';
+}
+
+var kvPlatform='All';
 function renderKeywordVolume(body){
-  var e=keywordEngine();
-  if(!e.length){
+  var all=keywordEngine();
+  if(!all.length){
     body.innerHTML='<div class="card note" style="margin-bottom:16px">No keyword data yet. Two ways to fill the <b>keyword_volume</b> feed:</div>'+
       '<div class="card" style="padding:16px"><b>1. Generate a seed list</b><p class="subtle" style="margin:6px 0 10px">Cross your product types with modifiers to get a starter keyword list, then go collect signals.</p><button class="btn primary" id="genSeeds">Download seed keywords</button></div>'+
       '<div class="card" style="padding:16px;margin-top:14px"><b>2. Run the collector</b><p class="subtle" style="margin:6px 0 0">Use <code>tools/collect-keywords.mjs</code> (free Google autocomplete) to expand seeds and fill autocomplete_rank, then upload the CSV. See the README.</p></div>';
     return;
   }
+  var platforms=Array.from(new Set(all.map(function(x){return x.platform;})));
+  if(kvPlatform!=='All'&&platforms.indexOf(kvPlatform)<0)kvPlatform='All';
+  var e=(kvPlatform==='All')?all:all.filter(function(x){return x.platform===kvPlatform;});
+  var chips='<div class="subtle" style="margin-bottom:8px">Volume is scored <b>per app</b> — 100 = the top keyword on that marketplace. Pick an app:</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">'+
+    ['All'].concat(platforms).map(function(p){return '<button class="btn kvplat'+(p===kvPlatform?' primary':'')+'" data-kvplat="'+esc(p)+'" style="padding:6px 12px;font-size:12px">'+esc(p)+'</button>';}).join('')+'</div>';
   var hi=e.filter(function(x){return x.confidence==='high';}).length;
   var emerging=e.filter(function(x){return x.trend>0;}).length;
   var avg=Math.round(e.reduce(function(a,b){return a+b.volume_index;},0)/e.length);
   var kpis='<div class="kpis">'+
-    kpi('Keywords tracked',String(e.length),'')+
+    kpi('Keywords ('+(kvPlatform==='All'?'all apps':esc(kvPlatform))+')',String(e.length),'')+
     kpi('Avg volume index',String(avg),'')+
     kpi('High-confidence',Math.round(hi/e.length*100)+'%','')+
     kpi('Emerging',String(emerging),'')+'</div>';
@@ -672,21 +731,21 @@ function renderKeywordVolume(body){
       '<td class="r num strong">'+x.opportunity+'</td>'+
       '<td class="r"><span class="pill '+actionPillClass(x.action)+'">'+x.action+'</span></td></tr>';
   }).join('');
-  body.innerHTML=kpis+
-    '<div class="card note" style="margin-bottom:14px">Volume index = weighted composite of <b>ad impressions</b> (0.40) + <b>Amazon SQP rank</b> (0.30) + <b>autocomplete position</b> (0.20) + <b>Google volume</b> (0.10), normalised 0–100. <b>real</b> = at least one true signal (ads/SQP); <b>proxy</b> = autocomplete/Google only. Opportunity = index × (1−your visibility) × conversion.</div>'+
+  body.innerHTML=chips+kpis+
+    '<div class="card note" style="margin-bottom:14px">Volume index = weighted composite of <b>ad impressions</b> (0.40) + <b>Amazon SQP rank</b> (0.30) + <b>autocomplete position</b> (0.20) + <b>Google volume</b> (0.10), normalised 0–100 <b>per app</b>. <b>real</b> = at least one true signal (ads/SQP); <b>proxy</b> = autocomplete/Google only. Opportunity = index × (1−your visibility) × conversion.</div>'+
     '<div class="sec-head"><h2>Keyword opportunity</h2><span class="meta">ranked by opportunity score</span></div>'+
     '<div class="card table-wrap"><table><thead><tr><th>Keyword</th><th class="r">Volume</th><th class="r">Comp</th><th class="r">Your rank</th><th class="r">Trend</th><th class="r">Opp.</th><th class="r">Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div class="card" style="padding:16px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><b>Discover more keywords</b><div class="subtle">Generate a fresh seed list from your catalogue, then collect signals for them.</div></div><button class="btn" id="genSeeds">Download seed keywords</button></div>';
 }
 
 /* ============ dashboard render ============ */
-var DOMAINS=['Overview','Recommendations','Learning','Sales','Marketplace','Geographic','Customer','Keywords','Keyword Volume','Advertising','Pricing','Inventory','Competitors','Content','Profitability','Forecast'];
-var DOM_SUB={Recommendations:'What to do this month, ranked by impact × learned weight',Learning:'How the engine improves from your past actions','Keyword Volume':'Composite volume index → opportunity → action',Content:'Needs a listing-content feed (images, titles, CTR) — not in monthly CSVs'};
+var DOMAINS=['Overview','Recommendations','Learning','Ingestion','Sales','Marketplace','Geographic','Customer','Keywords','Keyword Volume','Advertising','Pricing','Inventory','Competitors','Content','Profitability','Forecast'];
+var DOM_SUB={Recommendations:'What to do this month, ranked by impact × learned weight',Learning:'How the engine improves from your past actions',Ingestion:'What we ingest, from where, and how','Keyword Volume':'Composite volume index → opportunity → action',Content:'Needs a listing-content feed (images, titles, CTR) — not in monthly CSVs'};
 function feedsReady(needs){return needs.every(function(f){return f.indexOf('__')===0?false:(D[f]&&D[f].length);});}
 function loadAll(){FEEDS.forEach(function(f){D[f]=load(f);});}
 
 function domCount(dom){
-  if(dom==='Overview'||dom==='Recommendations'||dom==='Learning'||dom==='Keyword Volume')return null;
+  if(dom==='Overview'||dom==='Recommendations'||dom==='Learning'||dom==='Ingestion'||dom==='Keyword Volume')return null;
   var qs=REG.filter(function(x){return x.dom===dom;});var ready=qs.filter(function(x){return feedsReady(x.needs);}).length;
   return ready+'/'+qs.length;
 }
@@ -706,6 +765,7 @@ function renderDomain(dom){
   if(dom==='Overview'){renderOverview(body);return;}
   if(dom==='Recommendations'){body.innerHTML=recommendations();return;}
   if(dom==='Learning'){renderLearning(body);return;}
+  if(dom==='Ingestion'){renderIngestion(body);return;}
   if(dom==='Keyword Volume'){renderKeywordVolume(body);return;}
   var qs=REG.filter(function(x){return x.dom===dom;});
   body.innerHTML=qs.map(function(x){
@@ -876,6 +936,7 @@ document.getElementById('domBody').addEventListener('click',function(e){
   else if(t.classList.contains('rec-dismiss')){dismissAction(t.dataset.id);toast('Dismissed');renderDomain('Recommendations');}
   else if(t.id==='resetLearn'){localStorage.removeItem('qcomm_actionlog');localStorage.removeItem('qcomm_weights');toast('Learning reset');renderDomain('Learning');}
   else if(t.id==='genSeeds'){var kws=seedKeywords();var csv='platform,keyword,ad_impressions,autocomplete_rank,amazon_sqp_rank,google_volume,competition\n'+kws.map(function(k){return ',"'+String(k).replace(/"/g,'""')+'",,,,,';}).join('\n')+'\n';download('keyword_seeds.csv',csv);toast(kws.length+' seed keywords downloaded');}
+  else if(t.classList.contains('kvplat')){kvPlatform=t.getAttribute('data-kvplat');renderKeywordVolume(document.getElementById('domBody'));}
 });
 loadAll();renderNav('Overview');renderDomain('Overview');
 

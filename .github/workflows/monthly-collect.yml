@@ -20,10 +20,12 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Discover keywords (Google autocomplete, free)
+      - name: Discover keywords for all apps (Google autocomplete, free)
         run: |
           mkdir -p data
-          node tools/collect-keywords.mjs --seeds data/seeds.txt --platform Blinkit --depth 1 > data/keyword_volume.csv
+          node tools/collect-keywords.mjs --seeds data/seeds.txt \
+            --platforms "Blinkit,Zepto,Instamart,Amazon Now,BigBasket,Flipkart Minutes" \
+            --depth 1 > data/keyword_volume.csv
           echo "keyword rows: $(($(wc -l < data/keyword_volume.csv) - 1))"
 
       # --- Optional: rented competitor/rank data ---------------------------------

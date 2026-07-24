@@ -4,9 +4,11 @@
 // harvests suggestions, and writes a keyword_volume.csv the app's engine reads.
 //
 // Usage:
-//   node tools/collect-keywords.mjs "eco friendly plates" "paper cups" --platform Blinkit --depth 1 > keyword_volume.csv
-//   node tools/collect-keywords.mjs --seeds seeds.txt --platform Zepto > keyword_volume.csv
+//   node tools/collect-keywords.mjs "eco friendly plates" --platform Blinkit --depth 1 > keyword_volume.csv
+//   node tools/collect-keywords.mjs --seeds seeds.txt --platforms "Blinkit,Zepto,Amazon Now" > keyword_volume.csv
 //   node tools/collect-keywords.mjs --self-test
+//
+// --platform  = one app.  --platforms = comma list (fetches ONCE, emits a row per app).
 //
 // Notes:
 // - Google autocomplete is a DISCOVERY + popularity-order signal, not a per-platform
@@ -50,8 +52,10 @@ async function collect(seeds, { platform, depth }){
   }
 
   const rows = [...found.entries()].sort((a, b) => a[1] - b[1]);
+  const plats = (Array.isArray(platform) ? platform : [platform]);   // one fetch, emit per app
   const out = [HEADER];
-  for (const [kw, rank] of rows) out.push([platform, csvCell(kw), '', rank, '', '', ''].join(','));
+  for (const p of plats)
+    for (const [kw, rank] of rows) out.push([p, csvCell(kw), '', rank, '', '', ''].join(','));
   return out.join('\n') + '\n';
 }
 
@@ -60,6 +64,7 @@ function parseArgs(argv){
   for (let i = 0; i < argv.length; i++){
     const a = argv[i];
     if (a === '--platform') opts.platform = argv[++i];
+    else if (a === '--platforms') opts.platform = argv[++i].split(',').map(s => s.trim()).filter(Boolean);
     else if (a === '--depth') opts.depth = parseInt(argv[++i], 10) || 0;
     else if (a === '--seeds') opts.seedsFile = argv[++i];
     else if (a === '--self-test') opts.selfTest = true;
