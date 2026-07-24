@@ -1,0 +1,49 @@
+name: Monthly collect
+
+# Refreshes keyword-discovery data once a month and commits it to data/.
+# Runs on the 1st at 06:00 UTC; also runnable on demand from the Actions tab.
+on:
+  schedule:
+    - cron: "0 6 1 * *"     # 06:00 UTC, 1st of every month
+  workflow_dispatch: {}       # manual "Run workflow" button
+
+permissions:
+  contents: write             # allows the job to commit the refreshed CSV
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Discover keywords (Google autocomplete, free)
+        run: |
+          mkdir -p data
+          node tools/collect-keywords.mjs --seeds data/seeds.txt --platform Blinkit --depth 1 > data/keyword_volume.csv
+          echo "keyword rows: $(($(wc -l < data/keyword_volume.csv) - 1))"
+
+      # --- Optional: rented competitor/rank data ---------------------------------
+      # Add a QCA_API_KEY repo secret and a tools/collect-qca.mjs script, then
+      # uncomment. Secrets aren't readable in `if:`, so gate via an env var.
+      # - name: Competitor + rank (QuickCommerceAPI)
+      #   env:
+      #     QCA_API_KEY: ${{ secrets.QCA_API_KEY }}
+      #   run: |
+      #     [ -n "$QCA_API_KEY" ] && node tools/collect-qca.mjs > data/competitors.csv || echo "no QCA_API_KEY set, skipping"
+      # ---------------------------------------------------------------------------
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name "qcomm-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Monthly data refresh $(date +%Y-%m)"
+            git push
+          fi
