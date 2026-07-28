@@ -67,13 +67,13 @@ def main():
                 g = lambda name: r.get(names.get(name, -1), '')
                 item = g('ITEM_CODE')
                 if not item: continue
-                sales.append({'date': iso(g('ORDERED_DATE')), 'platform': 'blinkit',
+                sales.append({'date': iso(g('ORDERED_DATE')), 'platform': 'instamart',
                               'internal_sku': item, 'city': g('CITY'),
                               'units': num(g('UNITS_SOLD')), 'revenue': num(g('GMV'))})
                 if item not in skus:
                     skus[item] = {'internal_sku': item, 'product_name': g('PRODUCT_NAME'),
                                   'category': g('L3_CATEGORY')}
-            print('  blinkit sales:', os.path.basename(path))
+            print('  instamart sales (total GMV):', os.path.basename(path))
         elif low.endswith('.csv'):
             with open(path, encoding='utf-8-sig', errors='replace', newline='') as f:
                 rd = list(csv.DictReader(f))
@@ -81,19 +81,26 @@ def main():
             if kind == 'blinkit_ads':
                 for r in rd:
                     kw = r.get('Targeting Value', '') if r.get('Targeting Type') == 'Keyword' else ''
+                    d_sales = float(num(r.get('Direct Sales'))) + float(num(r.get('Indirect Sales')))
+                    d_qty = float(num(r.get('Direct Quantities Sold'))) + float(num(r.get('Indirect Quantities Sold')))
                     ads.append({'date': iso(r['Date']), 'platform': 'blinkit',
                                 'spend': num(r.get('Estimated Budget Consumed')),
                                 'impressions': num(r.get('Impressions')), 'clicks': '',
-                                'attributed_sales': str(float(num(r.get('Direct Sales'))) + float(num(r.get('Indirect Sales')))),
-                                'keyword': kw, 'internal_sku': ''})
-                print('  blinkit ads:', os.path.basename(path))
+                                'attributed_sales': str(d_sales), 'keyword': kw, 'internal_sku': ''})
+                    # ad-attributed sales -> sales feed so revenue-by-platform includes Blinkit (floor, not total)
+                    sales.append({'date': iso(r['Date']), 'platform': 'blinkit', 'internal_sku': '',
+                                  'city': '', 'units': str(d_qty), 'revenue': str(d_sales)})
+                print('  blinkit ads + ad-attributed sales:', os.path.basename(path))
             elif kind == 'bigbasket_ads':
                 for r in rd:
                     ads.append({'date': iso(r['Date']), 'platform': 'bigbasket',
                                 'spend': num(r.get('Ad Spend')), 'impressions': num(r.get('Ad Impressions')),
                                 'clicks': '', 'attributed_sales': num(r.get('Ad Revenue')),
                                 'keyword': '', 'internal_sku': r.get('Product ID', '')})
-                print('  bigbasket ads:', os.path.basename(path))
+                    sales.append({'date': iso(r['Date']), 'platform': 'bigbasket',
+                                  'internal_sku': r.get('Product ID', ''), 'city': '',
+                                  'units': num(r.get('Orders (SKU)')), 'revenue': num(r.get('Ad Revenue'))})
+                print('  bigbasket ads + ad-attributed sales:', os.path.basename(path))
             else:
                 print('  skip (unknown csv):', os.path.basename(path))
 
