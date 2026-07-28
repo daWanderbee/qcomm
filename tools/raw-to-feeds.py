@@ -87,9 +87,12 @@ def main():
                                 'spend': num(r.get('Estimated Budget Consumed')),
                                 'impressions': num(r.get('Impressions')), 'clicks': '',
                                 'attributed_sales': str(d_sales), 'keyword': kw, 'internal_sku': ''})
-                    # ad-attributed sales -> sales feed so revenue-by-platform includes Blinkit (floor, not total)
-                    sales.append({'date': iso(r['Date']), 'platform': 'blinkit', 'internal_sku': '',
+                    # ad-attributed sales -> sales feed so revenue-by-platform includes Blinkit (floor, not total).
+                    # Keyword-level report has no product, so bucket under one labelled synthetic SKU.
+                    sales.append({'date': iso(r['Date']), 'platform': 'blinkit', 'internal_sku': 'BLINKIT-ADS',
                                   'city': '', 'units': str(d_qty), 'revenue': str(d_sales)})
+                skus.setdefault('BLINKIT-ADS', {'internal_sku': 'BLINKIT-ADS',
+                    'product_name': 'Blinkit (ad-attributed, no SKU detail)', 'category': '—'})
                 print('  blinkit ads + ad-attributed sales:', os.path.basename(path))
             elif kind == 'bigbasket_ads':
                 for r in rd:
@@ -97,9 +100,13 @@ def main():
                                 'spend': num(r.get('Ad Spend')), 'impressions': num(r.get('Ad Impressions')),
                                 'clicks': '', 'attributed_sales': num(r.get('Ad Revenue')),
                                 'keyword': '', 'internal_sku': r.get('Product ID', '')})
+                    pid = r.get('Product ID', '')
                     sales.append({'date': iso(r['Date']), 'platform': 'bigbasket',
-                                  'internal_sku': r.get('Product ID', ''), 'city': '',
+                                  'internal_sku': pid, 'city': '',
                                   'units': num(r.get('Orders (SKU)')), 'revenue': num(r.get('Ad Revenue'))})
+                    if pid and pid not in skus:
+                        skus[pid] = {'internal_sku': pid, 'product_name': r.get('Product Name', pid),
+                                     'category': r.get('Category', '—')}
                 print('  bigbasket ads + ad-attributed sales:', os.path.basename(path))
             else:
                 print('  skip (unknown csv):', os.path.basename(path))
