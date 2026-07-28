@@ -364,10 +364,10 @@ var REG=[
 
 /* ---- KEYWORDS ---- */
 {dom:'Keywords',q:'Keywords driving the most sales',needs:['ads'],run:function(){
-  var m=groupSum(D.ads.filter(function(r){return r.keyword;}),function(r){return r.keyword;},function(r){return num(r,'attributed_sales');});
+  var m=groupSum(adsFilt().filter(function(r){return r.keyword;}),function(r){return r.keyword;},function(r){return num(r,'attributed_sales');});
   return rTable(['Keyword','Attributed sales'],sorted(m).slice(0,10).map(function(x){return[esc(x.k),inr(x.v)];}));}},
 {dom:'Keywords',q:'High impressions, low conversion',needs:['ads'],run:function(){
-  var byK={};D.ads.forEach(function(r){if(!r.keyword)return;var k=r.keyword;var o=byK[k]=byK[k]||{imp:0,clk:0,sales:0};o.imp+=num(r,'impressions');o.clk+=num(r,'clicks');o.sales+=num(r,'attributed_sales');});
+  var byK={};adsFilt().forEach(function(r){if(!r.keyword)return;var k=r.keyword;var o=byK[k]=byK[k]||{imp:0,clk:0,sales:0};o.imp+=num(r,'impressions');o.clk+=num(r,'clicks');o.sales+=num(r,'attributed_sales');});
   var rows=Object.keys(byK).map(function(k){var o=byK[k];return{k:k,imp:o.imp,cvr:o.clk>0?o.sales/o.clk:0};}).filter(function(x){return x.imp>500;}).sort(function(a,b){return a.cvr-b.cvr;}).slice(0,8);
   return rTable(['Keyword','Impressions','₹/click'],rows.map(function(x){return[esc(x.k),Math.round(x.imp).toLocaleString('en-IN'),'<span class="down">'+inr(x.cvr)+'</span>'];}));}},
 {dom:'Keywords',q:'Keywords losing rankings',needs:['rank'],run:function(){
@@ -376,7 +376,7 @@ var REG=[
   var losing=g.filter(function(x){return x.prev>0&&x.recent>x.prev;}).sort(function(a,b){return(b.recent-b.prev)-(a.recent-a.prev);}).slice(0,8);
   return losing.length?rTable(['Keyword','Was','Now'],losing.map(function(x){return[esc(x.k),'#'+Math.round(x.prev),'<span class="down">#'+Math.round(x.recent)+'</span>'];})):rNote('No keywords lost rank this period. 👍');}},
 {dom:'Keywords',q:'Rising CPC (getting expensive)',needs:['ads'],run:function(){
-  var g=growth(D.ads,function(r){return r.keyword;},function(r){return num(r,'spend');});if(!g)return null;
+  var g=growth(adsFilt(),function(r){return r.keyword;},function(r){return num(r,'spend');});if(!g)return null;
   var up=g.filter(function(x){return x.k&&x.prev>0&&x.pct>0.1;}).sort(function(a,b){return b.pct-a.pct;}).slice(0,6);
   return rTable(['Keyword','Spend growth'],up.map(function(x){return[esc(x.k),'<span class="down">'+pctS(x.pct)+'</span>'];}));}},
 
@@ -496,7 +496,7 @@ var REG=[
   var rows=keywordEngine().filter(function(x){return x.volume_index>40&&(x.rank===undefined||x.rank>8);}).sort(function(a,b){return b.volume_index-a.volume_index;}).slice(0,8);
   return rows.length?rTable(['Keyword','Volume','Your rank'],rows.map(function(x){return[esc(x.keyword),String(x.volume_index),x.rank===undefined?'<span class="down">absent</span>':'<span class="down">#'+Math.round(x.rank)+'</span>'];})):rNote('You already rank for the high-volume keywords. 👍');}},
 {dom:'Advertising',q:'Highest CPC keywords',needs:['ads'],run:function(){
-  var b={};D.ads.forEach(function(r){if(!r.keyword)return;var o=b[r.keyword]=b[r.keyword]||{sp:0,clk:0};o.sp+=num(r,'spend');o.clk+=num(r,'clicks');});
+  var b={};adsFilt().forEach(function(r){if(!r.keyword)return;var o=b[r.keyword]=b[r.keyword]||{sp:0,clk:0};o.sp+=num(r,'spend');o.clk+=num(r,'clicks');});
   return rTable(['Keyword','CPC'],Object.keys(b).map(function(k){return{k:k,c:b[k].clk>0?b[k].sp/b[k].clk:0};}).sort(function(a,b2){return b2.c-a.c;}).slice(0,8).map(function(x){return[esc(x.k),inr(x.c)];}));}},
 {dom:'Advertising',q:'Poor-CTR listings (ad click-through)',needs:['ads'],run:function(){
   var b={};D.ads.forEach(function(r){if(!r.internal_sku)return;var o=b[r.internal_sku]=b[r.internal_sku]||{i:0,c:0};o.i+=num(r,'impressions');o.c+=num(r,'clicks');});
@@ -697,6 +697,8 @@ function renderIngestion(body){
 }
 
 var kvPlatform='All';
+var adsPlatform='All';
+function adsFilt(){return adsPlatform==='All'?D.ads:D.ads.filter(function(r){return r.platform===adsPlatform;});}
 function renderKeywordVolume(body){
   var all=keywordEngine();
   if(!all.length){
@@ -768,7 +770,15 @@ function renderDomain(dom){
   if(dom==='Ingestion'){renderIngestion(body);return;}
   if(dom==='Keyword Volume'){renderKeywordVolume(body);return;}
   var qs=REG.filter(function(x){return x.dom===dom;});
-  body.innerHTML=qs.map(function(x){
+  var platBar='';
+  if((dom==='Keywords'||dom==='Advertising')&&(D.ads||[]).length){
+    var aps=Array.from(new Set(D.ads.map(function(r){return r.platform;})));
+    if(adsPlatform!=='All'&&aps.indexOf(adsPlatform)<0)adsPlatform='All';
+    platBar='<div class="subtle" style="margin-bottom:8px">Showing <b>'+(adsPlatform==='All'?'all platforms combined':esc(adsPlatform))+'</b> — pick one:</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">'+
+      ['All'].concat(aps).map(function(p){return '<button class="btn adsplat'+(p===adsPlatform?' primary':'')+'" data-adsplat="'+esc(p)+'" style="padding:6px 12px;font-size:12px">'+esc(p)+'</button>';}).join('')+'</div>';
+  }
+  body.innerHTML=platBar+qs.map(function(x){
     var head='<div class="qh">'+esc(x.q);
     if(!feedsReady(x.needs)){var missing=x.needs.map(function(f){return f.indexOf('__')===0?(MARKER_LABEL[f]||'extra data'):FEED_LABEL[f];});return'<div class="qblock">'+head+'<span class="needs">needs '+missing.join(' + ')+'</span></div><div class="card">'+rNote('Upload the '+missing.join(' + ')+' feed to answer this.')+'</div></div>';}
     head+='</div>';var res=x.run();
@@ -937,6 +947,7 @@ document.getElementById('domBody').addEventListener('click',function(e){
   else if(t.id==='resetLearn'){localStorage.removeItem('qcomm_actionlog');localStorage.removeItem('qcomm_weights');toast('Learning reset');renderDomain('Learning');}
   else if(t.id==='genSeeds'){var kws=seedKeywords();var csv='platform,keyword,ad_impressions,autocomplete_rank,amazon_sqp_rank,google_volume,competition\n'+kws.map(function(k){return ',"'+String(k).replace(/"/g,'""')+'",,,,,';}).join('\n')+'\n';download('keyword_seeds.csv',csv);toast(kws.length+' seed keywords downloaded');}
   else if(t.classList.contains('kvplat')){kvPlatform=t.getAttribute('data-kvplat');renderKeywordVolume(document.getElementById('domBody'));}
+  else if(t.classList.contains('adsplat')){adsPlatform=t.getAttribute('data-adsplat');var d=document.querySelector('.domlink.active');renderDomain(d?d.getAttribute('data-dom'):'Keywords');}
 });
 loadAll();renderNav('Overview');renderDomain('Overview');
 
