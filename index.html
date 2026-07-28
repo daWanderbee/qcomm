@@ -698,6 +698,7 @@ function renderIngestion(body){
 
 var kvPlatform='All';
 var adsPlatform='All';
+var salesPlatform='All';
 function adsFilt(){return adsPlatform==='All'?D.ads:D.ads.filter(function(r){return r.platform===adsPlatform;});}
 function renderKeywordVolume(body){
   var all=keywordEngine();
@@ -778,12 +779,24 @@ function renderDomain(dom){
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">'+
       ['All'].concat(aps).map(function(p){return '<button class="btn adsplat'+(p===adsPlatform?' primary':'')+'" data-adsplat="'+esc(p)+'" style="padding:6px 12px;font-size:12px">'+esc(p)+'</button>';}).join('')+'</div>';
   }
-  body.innerHTML=platBar+qs.map(function(x){
+  // ponytail: swap D.sales for the Sales-domain render only (sync render, restored right after) — avoids editing 7 call sites
+  var restore=null;
+  if(dom==='Sales'&&(D.sales||[]).length){
+    var sps=Array.from(new Set(D.sales.map(function(r){return r.platform;})));
+    if(salesPlatform!=='All'&&sps.indexOf(salesPlatform)<0)salesPlatform='All';
+    platBar='<div class="subtle" style="margin-bottom:8px">Showing <b>'+(salesPlatform==='All'?'all platforms combined':esc(salesPlatform))+'</b> — pick one:</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">'+
+      ['All'].concat(sps).map(function(p){return '<button class="btn salesplat'+(p===salesPlatform?' primary':'')+'" data-salesplat="'+esc(p)+'" style="padding:6px 12px;font-size:12px">'+esc(p)+'</button>';}).join('')+'</div>';
+    if(salesPlatform!=='All'){var _os=D.sales;D.sales=D.sales.filter(function(r){return r.platform===salesPlatform;});restore=function(){D.sales=_os;};}
+  }
+  var out=platBar+qs.map(function(x){
     var head='<div class="qh">'+esc(x.q);
     if(!feedsReady(x.needs)){var missing=x.needs.map(function(f){return f.indexOf('__')===0?(MARKER_LABEL[f]||'extra data'):FEED_LABEL[f];});return'<div class="qblock">'+head+'<span class="needs">needs '+missing.join(' + ')+'</span></div><div class="card">'+rNote('Upload the '+missing.join(' + ')+' feed to answer this.')+'</div></div>';}
     head+='</div>';var res=x.run();
     return'<div class="qblock">'+head+'<div class="card">'+(res||rNote('Not enough data yet (need at least two periods).'))+'</div></div>';
   }).join('');
+  if(restore)restore();
+  body.innerHTML=out;
 }
 function renderOverview(body){
   var totRev=D.sales.reduce(function(s,r){return s+num(r,'revenue');},0);
@@ -948,6 +961,7 @@ document.getElementById('domBody').addEventListener('click',function(e){
   else if(t.id==='genSeeds'){var kws=seedKeywords();var csv='platform,keyword,ad_impressions,autocomplete_rank,amazon_sqp_rank,google_volume,competition\n'+kws.map(function(k){return ',"'+String(k).replace(/"/g,'""')+'",,,,,';}).join('\n')+'\n';download('keyword_seeds.csv',csv);toast(kws.length+' seed keywords downloaded');}
   else if(t.classList.contains('kvplat')){kvPlatform=t.getAttribute('data-kvplat');renderKeywordVolume(document.getElementById('domBody'));}
   else if(t.classList.contains('adsplat')){adsPlatform=t.getAttribute('data-adsplat');var d=document.querySelector('.domlink.active');renderDomain(d?d.getAttribute('data-dom'):'Keywords');}
+  else if(t.classList.contains('salesplat')){salesPlatform=t.getAttribute('data-salesplat');renderDomain('Sales');}
 });
 loadAll();renderNav('Overview');renderDomain('Overview');
 
