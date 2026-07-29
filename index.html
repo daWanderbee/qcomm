@@ -722,6 +722,8 @@ function renderKeywordVolume(body){
     kpi('Avg volume index',String(avg),'')+
     kpi('High-confidence',Math.round(hi/e.length*100)+'%','')+
     kpi('Emerging',String(emerging),'')+'</div>';
+  // real (ad/SQP-backed) keywords lead — proxy autocomplete discovery follows
+  e=e.slice().sort(function(a,b){var ca=a.confidence==='high'?0:1,cb=b.confidence==='high'?0:1;return ca-cb||b.opportunity-a.opportunity;});
   var rows=e.slice(0,40).map(function(x){
     var conf=x.confidence==='high'?'<span class="pill acc">real</span>':'<span class="pill warn">proxy</span>';
     var rk=x.rank===undefined?'<span class="down">—</span>':'#'+Math.round(x.rank);

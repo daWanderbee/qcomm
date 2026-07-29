@@ -35,7 +35,7 @@ async function fetchSuggestions(q){
   }
 }
 
-async function collect(seeds, { platform, depth }){
+async function collect(seeds, { platform, depth, adMap }){
   const found = new Map();                  // keyword -> best (lowest) autocomplete rank
   const record = (kw, rank) => {
     kw = kw.trim().toLowerCase();
@@ -54,19 +54,59 @@ async function collect(seeds, { platform, depth }){
   const rows = [...found.entries()].sort((a, b) => a[1] - b[1]);
   const plats = (Array.isArray(platform) ? platform : [platform]);   // one fetch, emit per app
   const out = [HEADER];
-  for (const p of plats)
-    for (const [kw, rank] of rows) out.push([p, csvCell(kw), '', rank, '', '', ''].join(','));
+  for (const p of plats){
+    const ads = (adMap && adMap[p]) || {};   // real keyword -> impressions for this app
+    const seen = new Set();
+    // discovered keywords: fill real ad_impressions when we actually advertise that term
+    for (const [kw, rank] of rows){
+      out.push([p, csvCell(kw), ads[kw] != null ? ads[kw] : '', rank, '', '', ''].join(','));
+      seen.add(kw);
+    }
+    // real advertised keywords autocomplete never surfaced — always include them (concrete, real volume)
+    for (const kw of Object.keys(ads))
+      if (!seen.has(kw)) out.push([p, csvCell(kw), ads[kw], '', '', '', ''].join(','));
+  }
   return out.join('\n') + '\n';
 }
 
+// minimal CSV parse (handles quoted fields) -> array of row objects
+function parseCSV(text){
+  const rows = []; let row = [], cur = '', q = false;
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  for (let i = 0; i < text.length; i++){ const c = text[i];
+    if (q){ if (c === '"'){ if (text[i+1] === '"'){ cur += '"'; i++; } else q = false; } else cur += c; }
+    else { if (c === '"') q = true; else if (c === ',') { row.push(cur); cur = ''; }
+      else if (c === '\n'){ row.push(cur); rows.push(row); row = []; cur = ''; } else cur += c; } }
+  if (cur !== '' || row.length){ row.push(cur); rows.push(row); }
+  const head = rows.shift().map(h => h.trim());
+  return rows.filter(r => r.some(x => x.trim() !== ''))
+    .map(r => Object.fromEntries(head.map((h, j) => [h, (r[j] || '').trim()])));
+}
+
+// Real keyword volume from the ad reports: platform display-name -> { keyword: total impressions }.
+// This is the concrete, high-confidence signal (vs autocomplete guesses).
+const PLATNAME = { blinkit:'Blinkit', zepto:'Zepto', instamart:'Instamart',
+  'amazon now':'Amazon Now', bigbasket:'BigBasket', 'flipkart minutes':'Flipkart Minutes' };
+function loadAds(text){
+  const map = {};
+  for (const r of parseCSV(text)){
+    const kw = (r.keyword || '').trim().toLowerCase();
+    if (!kw) continue;
+    const p = PLATNAME[(r.platform || '').toLowerCase()] || r.platform;
+    (map[p] = map[p] || {}); map[p][kw] = (map[p][kw] || 0) + (Number(r.impressions) || 0);
+  }
+  return map;
+}
+
 function parseArgs(argv){
-  const seeds = [], opts = { platform: 'Google', depth: 0, selfTest: false, seedsFile: null };
+  const seeds = [], opts = { platform: 'Google', depth: 0, selfTest: false, seedsFile: null, adsFile: 'data/ads.csv' };
   for (let i = 0; i < argv.length; i++){
     const a = argv[i];
     if (a === '--platform') opts.platform = argv[++i];
     else if (a === '--platforms') opts.platform = argv[++i].split(',').map(s => s.trim()).filter(Boolean);
     else if (a === '--depth') opts.depth = parseInt(argv[++i], 10) || 0;
     else if (a === '--seeds') opts.seedsFile = argv[++i];
+    else if (a === '--ads') opts.adsFile = argv[++i];
     else if (a === '--self-test') opts.selfTest = true;
     else seeds.push(a);
   }
@@ -85,6 +125,9 @@ async function main(){
     const line = ['Blinkit', csvCell('eco, plates'), '', 1, '', '', ''].join(',');
     console.assert(line.includes('"eco, plates"'), 'should quote commas');
     console.assert(HEADER.split(',').length === 7, 'header width');
+    // real ad keywords get injected with impressions, even if autocomplete missed them
+    const am = loadAds('date,platform,keyword,impressions\nx,blinkit,dona,9858\n');
+    console.assert(am.Blinkit && am.Blinkit.dona === 9858, 'loadAds maps platform + sums impressions');
     console.log('collect-keywords self-test passed');
     return;
   }
@@ -98,8 +141,19 @@ async function main(){
     process.stderr.write('No seeds. Pass terms as args or --seeds file.txt (or --self-test).\n');
     process.exit(1);
   }
+  // Pull real keyword impressions from the ad reports (concrete signal, not autocomplete)
+  let adMap = {};
+  try {
+    const fs = await import('node:fs');
+    if (fs.existsSync(opts.adsFile)){
+      adMap = loadAds(fs.readFileSync(opts.adsFile, 'utf8'));
+      const n = Object.values(adMap).reduce((a, m) => a + Object.keys(m).length, 0);
+      process.stderr.write('Loaded ' + n + ' real ad keyword(s) from ' + opts.adsFile + '\n');
+    }
+  } catch (e) { process.stderr.write('warn: could not read ads file: ' + e.message + '\n'); }
+
   process.stderr.write('Expanding ' + allSeeds.length + ' seed(s), depth ' + opts.depth + '…\n');
-  process.stdout.write(await collect(allSeeds, opts));
+  process.stdout.write(await collect(allSeeds, { ...opts, adMap }));
 }
 
 main();
