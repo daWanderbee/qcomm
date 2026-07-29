@@ -24,6 +24,7 @@ jobs:
         run: |
           mkdir -p data
           node tools/collect-keywords.mjs --seeds data/seeds.txt \
+            --festivals data/festivals.csv --festival-window 60 \
             --platforms "Blinkit,Zepto,Instamart,Amazon Now,BigBasket,Flipkart Minutes" \
             --depth 1 > data/keyword_volume.csv
           echo "keyword rows: $(($(wc -l < data/keyword_volume.csv) - 1))"

@@ -98,8 +98,23 @@ function loadAds(text){
   return map;
 }
 
+// Seasonal festival keywords: pick festivals whose date falls within [today, today+window]
+// and return their keyword modifiers. Pure fn so it's testable and the monthly cron self-updates.
+function festivalKeywords(csvText, today, windowDays){
+  const horizon = new Date(today.getTime() + windowDays * 864e5);
+  const keywords = [], names = [];
+  for (const r of parseCSV(csvText)){
+    const d = new Date(r.date);
+    if (isNaN(d) || d < today || d > horizon || !r.keywords) continue;
+    names.push(r.name + ' (' + r.date + ')');
+    for (const k of r.keywords.split(';').map(s => s.trim()).filter(Boolean)) keywords.push(k);
+  }
+  return { keywords, names };
+}
+
 function parseArgs(argv){
-  const seeds = [], opts = { platform: 'Google', depth: 0, selfTest: false, seedsFile: null, adsFile: 'data/ads.csv' };
+  const seeds = [], opts = { platform: 'Google', depth: 0, selfTest: false, seedsFile: null,
+    adsFile: 'data/ads.csv', festivalsFile: null, festWindow: 60, today: null };
   for (let i = 0; i < argv.length; i++){
     const a = argv[i];
     if (a === '--platform') opts.platform = argv[++i];
@@ -107,6 +122,9 @@ function parseArgs(argv){
     else if (a === '--depth') opts.depth = parseInt(argv[++i], 10) || 0;
     else if (a === '--seeds') opts.seedsFile = argv[++i];
     else if (a === '--ads') opts.adsFile = argv[++i];
+    else if (a === '--festivals') opts.festivalsFile = argv[++i];
+    else if (a === '--festival-window') opts.festWindow = parseInt(argv[++i], 10) || 60;
+    else if (a === '--today') opts.today = argv[++i];
     else if (a === '--self-test') opts.selfTest = true;
     else seeds.push(a);
   }
@@ -128,6 +146,9 @@ async function main(){
     // real ad keywords get injected with impressions, even if autocomplete missed them
     const am = loadAds('date,platform,keyword,impressions\nx,blinkit,dona,9858\n');
     console.assert(am.Blinkit && am.Blinkit.dona === 9858, 'loadAds maps platform + sums impressions');
+    // seasonal festival picker: includes upcoming, excludes far-off
+    const fk = festivalKeywords('date,name,keywords\n2026-08-26,Onam,onam sadya plate;banana leaf plate\n2026-12-25,Christmas,xmas plate\n', new Date('2026-07-29'), 60);
+    console.assert(fk.keywords.includes('onam sadya plate') && !fk.keywords.includes('xmas plate'), 'festival window picks upcoming only');
     console.log('collect-keywords self-test passed');
     return;
   }
@@ -141,6 +162,22 @@ async function main(){
     process.stderr.write('No seeds. Pass terms as args or --seeds file.txt (or --self-test).\n');
     process.exit(1);
   }
+  // Auto-add keywords for festivals coming up within the window (seasonal, self-updating each run)
+  if (opts.festivalsFile){
+    try {
+      const fs = await import('node:fs');
+      if (fs.existsSync(opts.festivalsFile)){
+        const today = opts.today ? new Date(opts.today) : new Date();
+        const fk = festivalKeywords(fs.readFileSync(opts.festivalsFile, 'utf8'), today, opts.festWindow);
+        if (fk.names.length){
+          allSeeds = allSeeds.concat(fk.keywords);
+          process.stderr.write('Festivals in next ' + opts.festWindow + 'd: ' + fk.names.join(', ') + '\n');
+          process.stderr.write('Added ' + fk.keywords.length + ' festival keyword seed(s)\n');
+        } else process.stderr.write('No festivals within ' + opts.festWindow + ' days.\n');
+      }
+    } catch (e) { process.stderr.write('warn: could not read festivals file: ' + e.message + '\n'); }
+  }
+
   // Pull real keyword impressions from the ad reports (concrete signal, not autocomplete)
   let adMap = {};
   try {
