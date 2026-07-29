@@ -697,7 +697,17 @@ function renderIngestion(body){
 }
 
 var kvPlatform='All';
+var kvFestival=false;
 var viewPlatform='All';
+// Upcoming festival keywords from the festivals feed (date >= latest data date): [{festival,date,keyword}]
+function festivalKw(){
+  var today=(typeof dataDate==='function'?dataDate():'')||'';var out=[];
+  (D.festivals||[]).forEach(function(r){
+    if(today&&r.date<today)return;
+    (r.keywords||'').split(';').forEach(function(k){k=k.trim().toLowerCase();if(k)out.push({festival:r.name,date:r.date,keyword:k});});
+  });
+  return out;
+}
 var PLATFEEDS=['sales','ads','reviews','inventory','competitors','returns','rank','listing'];
 function platformsInView(){var s={};PLATFEEDS.forEach(function(f){(D[f]||[]).forEach(function(r){if(r.platform)s[r.platform]=1;});});return Object.keys(s);}
 function renderKeywordVolume(body){
@@ -712,8 +722,29 @@ function renderKeywordVolume(body){
   if(kvPlatform!=='All'&&platforms.indexOf(kvPlatform)<0)kvPlatform='All';
   var e=(kvPlatform==='All')?all:all.filter(function(x){return x.platform===kvPlatform;});
   var chips='<div class="subtle" style="margin-bottom:8px">Volume is scored <b>per app</b> — 100 = the top keyword on that marketplace. Pick an app:</div>'+
-    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">'+
-    ['All'].concat(platforms).map(function(p){return '<button class="btn kvplat'+(p===kvPlatform?' primary':'')+'" data-kvplat="'+esc(p)+'" style="padding:6px 12px;font-size:12px">'+esc(p)+'</button>';}).join('')+'</div>';
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+
+    ['All'].concat(platforms).map(function(p){return '<button class="btn kvplat'+(p===kvPlatform?' primary':'')+'" data-kvplat="'+esc(p)+'" style="padding:6px 12px;font-size:12px">'+esc(p)+'</button>';}).join('')+'</div>'+
+    '<div style="margin-bottom:18px"><button class="btn kvfest'+(kvFestival?' primary':'')+'" style="padding:6px 12px;font-size:12px">🎉 '+(kvFestival?'Festival keywords only ✓':'Festival keywords only')+'</button></div>';
+  if(kvFestival){
+    var look={};all.forEach(function(x){look[x.platform+'|'+x.keyword]=x;});
+    var frows=festivalKw().map(function(f){
+      var rec;
+      if(kvPlatform!=='All')rec=look[kvPlatform+'|'+f.keyword];
+      else{var best=null;platforms.forEach(function(p){var r=look[p+'|'+f.keyword];if(r&&(!best||r.volume_index>best.volume_index))best=r;});rec=best;}
+      return{festival:f.festival,date:f.date,keyword:f.keyword,rec:rec};
+    });
+    var fhtml=frows.map(function(x){
+      var v=x.rec?(x.rec.volume_index+' '+(x.rec.confidence==='high'?'<span class="pill acc">real</span>':'<span class="pill warn">proxy</span>')):'<span class="down">—</span>';
+      var op=x.rec?String(x.rec.opportunity):'—';
+      var act=x.rec?'<span class="pill '+actionPillClass(x.rec.action)+'">'+x.rec.action+'</span>':'<span class="subtle">add to campaign</span>';
+      return'<tr><td class="strong">'+esc(x.keyword)+'</td><td>'+esc(x.festival)+'</td><td class="num">'+esc(x.date)+'</td><td class="r num">'+v+'</td><td class="r num strong">'+op+'</td><td class="r">'+act+'</td></tr>';
+    }).join('');
+    body.innerHTML=chips+
+      '<div class="card note" style="margin-bottom:14px">Festival keywords for the upcoming season (from your <b>festivals</b> calendar), '+(kvPlatform==='All'?'best-scoring app shown':'scored for '+esc(kvPlatform))+'. “—” = not yet in the volume feed → a fresh keyword to add to that platform’s campaign.</div>'+
+      '<div class="sec-head"><h2>🎉 Festival keywords</h2><span class="meta">'+frows.length+' keywords · upcoming festivals</span></div>'+
+      '<div class="card table-wrap"><table><thead><tr><th>Keyword</th><th>Festival</th><th>Date</th><th class="r">Volume</th><th class="r">Opp.</th><th class="r">Action</th></tr></thead><tbody>'+(fhtml||'<tr><td colspan="6">No upcoming festivals in the calendar feed.</td></tr>')+'</tbody></table></div>';
+    return;
+  }
   var hi=e.filter(function(x){return x.confidence==='high';}).length;
   var emerging=e.filter(function(x){return x.trend>0;}).length;
   var avg=Math.round(e.reduce(function(a,b){return a+b.volume_index;},0)/e.length);
@@ -954,6 +985,7 @@ document.getElementById('domBody').addEventListener('click',function(e){
   else if(t.id==='resetLearn'){localStorage.removeItem('qcomm_actionlog');localStorage.removeItem('qcomm_weights');toast('Learning reset');renderDomain('Learning');}
   else if(t.id==='genSeeds'){var kws=seedKeywords();var csv='platform,keyword,ad_impressions,autocomplete_rank,amazon_sqp_rank,google_volume,competition\n'+kws.map(function(k){return ',"'+String(k).replace(/"/g,'""')+'",,,,,';}).join('\n')+'\n';download('keyword_seeds.csv',csv);toast(kws.length+' seed keywords downloaded');}
   else if(t.classList.contains('kvplat')){kvPlatform=t.getAttribute('data-kvplat');renderKeywordVolume(document.getElementById('domBody'));}
+  else if(t.classList.contains('kvfest')){kvFestival=!kvFestival;renderKeywordVolume(document.getElementById('domBody'));}
   else if(t.classList.contains('viewplat')){viewPlatform=t.getAttribute('data-viewplat');var d=document.querySelector('.domlink.active');renderDomain(d?d.getAttribute('data-dom'):'Sales');}
 });
 loadAll();renderNav('Overview');renderDomain('Overview');
