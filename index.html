@@ -139,7 +139,7 @@
 
 <script>
 /* ============ feeds & storage ============ */
-var FEEDS=['sales','skus','ads','rank','reviews','inventory','competitors','cost','returns','listing','keyword_volume','festivals','keywords','cities'];
+var FEEDS=['sales','skus','ads','rank','reviews','inventory','competitors','cost','returns','listing','keyword_volume','festivals','keywords','cities','pricing'];
 // Auto-sync: any CSV committed to the repo's data/ folder loads on open — no manual upload.
 var REPO_DATA_BASE='https://raw.githubusercontent.com/daWanderbee/qcomm/master/data';
 var KEY=function(f){return 'qcomm_'+f;};
@@ -159,9 +159,10 @@ var REQUIRED={
   keyword_volume:['platform','keyword'],
   festivals:['date','name'],
   keywords:['keyword','platform'],
-  cities:['city']
+  cities:['city'],
+  pricing:['platform','product','mrp','sp']
 };
-var FEED_LABEL={sales:'Sales',skus:'SKUs',ads:'Ads',rank:'Keyword rank',reviews:'Reviews',inventory:'Inventory',competitors:'Competitors',cost:'Cost',returns:'Returns',listing:'Listings',keyword_volume:'Keyword volume',festivals:'Festivals',keywords:'Keywords',cities:'Cities'};
+var FEED_LABEL={sales:'Sales',skus:'SKUs',ads:'Ads',rank:'Keyword rank',reviews:'Reviews',inventory:'Inventory',competitors:'Competitors',cost:'Cost',returns:'Returns',listing:'Listings',keyword_volume:'Keyword volume',festivals:'Festivals',keywords:'Keywords',cities:'Cities',pricing:'Pricing (MRP/SP)'};
 var MARKER_LABEL={'__bundles__':'bundle mapping','__price_history__':'price + conversion history','__inventory_age__':'inventory received-date','__competitor_listing__':'competitor listing snapshots','__listing__':'listing'};
 // What each feed is, where it comes from, and how it's ingested — shown on the Ingestion tab.
 var FEED_META={
@@ -402,6 +403,15 @@ var REG=[
   var rev=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'revenue');});
   var un=groupSum(D.sales,function(r){return r.internal_sku;},function(r){return num(r,'units');});
   return rTable(['Product','Avg price/unit'],Object.keys(rev).map(function(k){return[esc(name(k)),inr(un[k]>0?rev[k]/un[k]:0)];}));}},
+{dom:'Pricing',q:'Discount depth by SKU (MRP vs selling price)',needs:['pricing'],run:function(){
+  var rows=(D.pricing||[]).map(function(r){var mrp=num(r,'mrp'),sp=num(r,'sp');return{p:r.platform,name:name(r.internal_sku)||r.product,mrp:mrp,sp:sp,d:mrp>0?(mrp-sp)/mrp*100:0};})
+    .filter(function(x){return x.mrp>0;}).sort(function(a,b){return b.d-a.d;});
+  if(!rows.length)return rNote('No MRP/SP rows in the pricing feed.');
+  var avg=rows.reduce(function(a,b){return a+b.d;},0)/rows.length;
+  return '<div class="note" style="margin-bottom:10px">Average discount off MRP: <b>'+avg.toFixed(0)+'%</b>. Deep cuts (>50%) erode margin — check they still clear cost.</div>'+
+    rTable(['Product','Platform','MRP','Sell price','Discount'],rows.map(function(x){
+      return[esc(x.name),esc(x.p),inr(x.mrp),inr(x.sp),
+        '<span class="pill '+(x.d>50?'crit':x.d>=25?'warn':'acc')+'">'+x.d.toFixed(0)+'% off</span>'];}));}},
 {dom:'Pricing',q:'Competitors who changed price',needs:['competitors'],run:function(){
   var g=growth(D.competitors,function(r){return r.competitor+' · '+r.product;},function(r){return num(r,'price');});if(!g)return null;
   var moved=g.filter(function(x){return x.prev>0&&Math.abs(x.recent-x.prev)>0.5;}).sort(function(a,b){return Math.abs(b.recent-b.prev)-Math.abs(a.recent-a.prev);}).slice(0,8);
@@ -708,7 +718,7 @@ function festivalKw(){
   });
   return out;
 }
-var PLATFEEDS=['sales','ads','reviews','inventory','competitors','returns','rank','listing'];
+var PLATFEEDS=['sales','ads','reviews','inventory','competitors','returns','rank','listing','pricing'];
 function platformsInView(){var s={};PLATFEEDS.forEach(function(f){(D[f]||[]).forEach(function(r){if(r.platform)s[r.platform]=1;});});return Object.keys(s);}
 function renderKeywordVolume(body){
   var all=keywordEngine();

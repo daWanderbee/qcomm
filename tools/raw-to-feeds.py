@@ -60,7 +60,7 @@ def rating_num(s):
     except ValueError: return None
 
 def main():
-    sales, skus, ads, inv, reviews = [], {}, [], {}, []
+    sales, skus, ads, inv, reviews, pricing = [], {}, [], {}, [], []
 
     for path in sorted(glob.glob(os.path.join(RAW, '*'))):
         low = path.lower()
@@ -73,20 +73,32 @@ def main():
                 flat = ' '.join(v for r in rows[:3] for v in r.values())
                 if 'RATING' in flat and 'MRP' in flat:
                     skumap = {(v['product_name'] or '').strip().lower(): k for k, v in skus.items()}
+                    def money(v):
+                        try: return round(float(str(v).strip()), 2)
+                        except (ValueError, TypeError): return None
                     for r in rows[2:]:
                         iname = (r.get(1) or '').strip()
+                        isku = (skumap.get(iname.lower()) or iname) if iname else ''
                         irat = rating_num(r.get(4, ''))
                         if irat is not None and iname:
                             # use the SKU code when the name matches sales, else the name itself so
                             # name() still renders a readable label in the by-product rating view
-                            reviews.append({'platform': 'instamart', 'internal_sku': skumap.get(iname.lower()) or iname,
+                            reviews.append({'platform': 'instamart', 'internal_sku': isku,
                                             'rating': irat, 'review_text': '', 'product_name': iname})
+                        imrp, isp = money(r.get(2)), money(r.get(3))
+                        if iname and imrp and isp:
+                            pricing.append({'platform': 'instamart', 'internal_sku': isku,
+                                            'product': iname, 'mrp': imrp, 'sp': isp})
                         bname = (r.get(5) or '').strip()
                         brat = rating_num(r.get(8, ''))
                         if brat is not None and bname:
                             reviews.append({'platform': 'bigbasket', 'internal_sku': bname,
                                             'rating': brat, 'review_text': '', 'product_name': bname})
-                    print('  mrp price+rating sheet -> reviews (INSTA + BB ratings):', os.path.basename(path))
+                        bmrp, bsp = money(r.get(6)), money(r.get(7))
+                        if bname and bmrp and bsp:
+                            pricing.append({'platform': 'bigbasket', 'internal_sku': bname,
+                                            'product': bname, 'mrp': bmrp, 'sp': bsp})
+                    print('  mrp sheet -> reviews (ratings) + pricing (MRP/SP):', os.path.basename(path))
                 else:
                     print('  skip (unknown xlsx):', os.path.basename(path))
                 continue
@@ -156,6 +168,7 @@ def main():
     write('ads.csv',   ads, ['date','platform','spend','impressions','clicks','attributed_sales','keyword','internal_sku'])
     write('inventory.csv', list(inv.values()), ['date','platform','internal_sku','warehouse','stock_on_hand'])
     write('reviews.csv', reviews, ['platform','internal_sku','rating','review_text','product_name'])
+    write('pricing.csv', pricing, ['platform','internal_sku','product','mrp','sp'])
 
     # ponytail: one self-check — dates normalise and columns don't misalign
     assert rating_num('4+') == 4.0 and rating_num('4.5999999999999996') == 4.6 and rating_num('') is None
