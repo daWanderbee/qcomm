@@ -46,14 +46,15 @@ def read_xlsx_sheet1(path):
 
 def classify_csv(header):
     h = set(header)
-    if {'Targeting Value', 'Direct Sales'} <= h: return 'blinkit_ads'
-    if {'Ad Spend', 'Ad Revenue'} <= h:          return 'bigbasket_ads'
+    if {'Targeting Value', 'Direct Sales'} <= h:     return 'blinkit_ads'
+    if {'Ad Spend', 'Ad Revenue'} <= h:              return 'bigbasket_ads'
+    if {'SkuCode', 'WarehouseQtyAvailable'} <= h:    return 'instamart_inventory'
     return None
 
 def num(v): return (str(v).strip() or '0')
 
 def main():
-    sales, skus, ads = [], {}, []
+    sales, skus, ads, inv = [], {}, [], {}
 
     for path in sorted(glob.glob(os.path.join(RAW, '*'))):
         low = path.lower()
@@ -104,6 +105,18 @@ def main():
                         skus[pid] = {'internal_sku': pid, 'product_name': r.get('Product Name', pid),
                                      'category': r.get('Category', '—')}
                 print('  bigbasket ads + ad-attributed sales:', os.path.basename(path))
+            elif kind == 'instamart_inventory':
+                for r in rd:
+                    sku = (r.get('SkuCode') or '').strip()
+                    wh  = (r.get('FacilityName') or '').strip()
+                    if not sku: continue
+                    inv[(sku, wh)] = {'date': '', 'platform': 'instamart', 'internal_sku': sku,
+                                      'warehouse': wh or (r.get('City') or '').strip(),
+                                      'stock_on_hand': num(r.get('WarehouseQtyAvailable'))}
+                    if sku not in skus:   # inventory carries product names sales may not have
+                        skus[sku] = {'internal_sku': sku, 'product_name': r.get('SkuDescription', sku),
+                                     'category': r.get('L2', '—')}
+                print('  instamart inventory (per facility):', os.path.basename(path))
             else:
                 print('  skip (unknown csv):', os.path.basename(path))
 
@@ -115,6 +128,7 @@ def main():
     write('sales.csv', sales, ['date','platform','internal_sku','city','units','revenue'])
     write('skus.csv',  list(skus.values()), ['internal_sku','product_name','category'])
     write('ads.csv',   ads, ['date','platform','spend','impressions','clicks','attributed_sales','keyword','internal_sku'])
+    write('inventory.csv', list(inv.values()), ['date','platform','internal_sku','warehouse','stock_on_hand'])
 
     # ponytail: one self-check — dates normalise and columns don't misalign
     assert iso('46226') == '2026-07-23', iso('46226')

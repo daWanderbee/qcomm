@@ -1,0 +1,87 @@
+StorageType,FacilityName,City,SkuCode,SkuDescription,L1,L2,ShelfLifeDays,BusinessCategory,DaysOnHand,PotentialGmvLoss,OpenPos,OpenPoQuantity,WarehouseQtyAvailable
+Ambient,HYD IM2,HYDERABAD,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,3860.01,"[CHCPO370500"",""CHCPO369029]",80,5
+Ambient,HYD IM1,HYDERABAD,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,2,4386.69,"[CHMPO319520"",""CHMPO316273"",""CHMPO316671]",120,13
+Ambient,MUM IM3,MUMBAI,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,5945.94,"[CI3PO77345"",""CI3PO79275]",160,5
+Ambient,MUM IM1,MUMBAI,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,4,5363.82,[CIMPO117779],80,37
+Ambient,MUM FC22,MUMBAI,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,3728.34,"[CMFPO344461"",""CMFPO342433]",80,4
+Ambient,PUN DELHIVERY,PUNE,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,6431.04,"[CPDPO293214"",""CPDPO290836]",240,0
+Ambient,GOA IM1,CENTRAL GOA,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,727.65,[GCAPO65949],40,1
+Ambient,CBE ECOM,COIMBATORE,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,3125.43,[],0,0
+Ambient,JAI IM1,JAIPUR,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,5,921.69,[],0,7
+Ambient,KOC IM1,KOCHI,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,4026.33,"[KOCPO126460"",""KOCPO127958]",80,0
+Ambient,KOLKATA ECOM,KOLKATA,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,12543.3,[],0,0
+Ambient,LKO IM1,LUCKNOW,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,949.41,[],0,1
+Ambient,BLR IM1,BANGALORE,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,4601.52,"[MBIPO412448"",""MBIPO411936]",120,3
+Ambient,NAG IM1,NAGPUR,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,1004.85,[],0,0
+Ambient,VIZ IM1,VIZAG,18503,Chuk 180 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,2744.28,[],0,1
+Ambient,HYD IM1,HYDERABAD,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,7346.57,"[CHMPO319520"",""CHMPO316011"",""CHMPO316671"",""CHMPO316273]",80,3
+Ambient,MUM IM3,MUMBAI,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,2,10673.74,"[CI3PO77345"",""CI3PO79275]",120,12
+Ambient,MUM FC22,MUMBAI,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,8284.43,[CMFPO342433],60,0
+Ambient,HYD IM4,HYDERABAD,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,10227.14,"[CMMPO13717"",""CMMPO13579"",""CMMPO13839"",""CMMPO13936"",""CMMPO14042"",""CMMPO14118]",240,0
+Ambient,PUN DELHIVERY,PUNE,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,3,7435.89,[CPDPO290836],40,12
+Ambient,NOI IM1,NOIDA,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,2,7726.18,[],0,7
+Ambient,DLHY GGNFC5,GURGAON,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,1,1674.75,[],0,1
+Ambient,GOA IM1,CENTRAL GOA,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,4041.73,[],0,0
+Ambient,CBE ECOM,COIMBATORE,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,19449.43,"[JCEPO183268"",""JCEPO185441"",""JCEPO183888"",""JCEPO184776]",240,0
+Ambient,KOC IM1,KOCHI,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,14760.13,[],0,1
+Ambient,BLR IM1,BANGALORE,18504,Chuk 10 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,8530.06,"[MBIPO406375"",""MBIPO413891"",""MBIPO412448"",""MBIPO408445]",100,0
+Ambient,AHM DELHIVERY,AHMEDABAD,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,4121.74,[],0,1
+Ambient,MUM IM1,MUMBAI,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,1,19945.03,[CIMPO117779],80,11
+Ambient,MUM FC22,MUMBAI,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,10653.65,"[CMFPO342433"",""CMFPO344461]",60,1
+Ambient,HYD IM4,HYDERABAD,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,3597.79,"[CMMPO13839"",""CMMPO13371]",40,0
+Ambient,PUN DELHIVERY,PUNE,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,8208.55,"[CPDPO290836"",""CPDPO293214]",60,0
+Ambient,DLHY GGNFC5,GURGAON,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,4226.53,"[FC5PO422600"",""FC5PO422063]",60,1
+Ambient,CHN ECOM,CHENNAI,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,1047.9,[],0,0
+Ambient,KOC IM1,KOCHI,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,4261.46,[KOCPO126460],20,0
+Ambient,KOLKATA ECOM,KOLKATA,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,1,19176.57,[],0,7
+Ambient,BLR IM1,BANGALORE,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,7579.81,"[MBIPO409537"",""MBIPO412448"",""MBIPO410364]",60,1
+Ambient,VIZ IM1,VIZAG,18506,Chuk 4 Cp Mealtray Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,3458.07,[],0,0
+Ambient,HYD IM4,HYDERABAD,197453,Chuk 360 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,1857.31,"[CMMPO14484"",""CMMPO14402"",""CMMPO13936"",""CMMPO13371"",""CMMPO13839]",200,0
+Ambient,NOI IM1,NOIDA,197453,Chuk 360 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,1762.67,[],0,0
+Ambient,KOLKATA ECOM,KOLKATA,197453,Chuk 360 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,2153.06,[],0,1
+Ambient,KOC IM1,KOCHI,292876,Chuk 3 Compartments Snack Tray Kanjak Plate Thali 10.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,2721.25,[],0,1
+Ambient,KOLKATA ECOM,KOLKATA,292876,Chuk 3 Compartments Snack Tray Kanjak Plate Thali 10.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,1286.25,[],0,0
+Ambient,VIZ IM1,VIZAG,292876,Chuk 3 Compartments Snack Tray Kanjak Plate Thali 10.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,1365,[],0,0
+Ambient,KOC IM1,KOCHI,57850,Chuk Party Caddy 1.0 Pack,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,3143.56,[],0,4
+Ambient,LKO IM1,LUCKNOW,57850,Chuk Party Caddy 1.0 Pack,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,831.67,[],0,1
+Ambient,HYD IM2,HYDERABAD,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,4,5106.78,"[CHCPO366456"",""CHCPO369029]",64,19
+Ambient,HYD IM1,HYDERABAD,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,3,2672.46,"[CHMPO316011"",""CHMPO316671]",64,8
+Ambient,MUM FC22,MUMBAI,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,12528.81,[CMFPO344461],256,0
+Ambient,HYD IM4,HYDERABAD,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,4,9353.61,"[CMMPO14118"",""CMMPO13936"",""CMMPO13839"",""CMMPO14402"",""CMMPO13717]",256,32
+Ambient,PUN DELHIVERY,PUNE,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,15690.78,"[CPDPO293214"",""CPDPO290836]",320,1
+Ambient,GAU IM1,GUWAHATI,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,727.65,[],0,0
+Ambient,CBE ECOM,COIMBATORE,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,6112.26,[],0,0
+Ambient,KOC IM1,KOCHI,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,2566.62,[],0,1
+Ambient,KOLKATA ECOM,KOLKATA,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,12727.26,[],0,1
+Ambient,BLR IM1,BANGALORE,63565,Chuk 3 Partition Plates Kanjak Plate Thali 15.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,8295.21,"[MBIPO409099"",""MBIPO412448"",""MBIPO413891"",""MBIPO411936]",256,1
+Ambient,AHM DELHIVERY,AHMEDABAD,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,2200.73,[],0,2
+Ambient,HYD IM2,HYDERABAD,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,1,2962.12,"[CHCPO367263"",""CHCPO370500]",80,3
+Ambient,MUM IM3,MUMBAI,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,5288.01,"[CI3PO79275"",""CI3PO77345]",120,1
+Ambient,MUM IM1,MUMBAI,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,2,4808.23,[CIMPO117779],80,12
+Ambient,MUM FC22,MUMBAI,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,5340.16,"[CMFPO344461"",""CMFPO342433]",120,2
+Ambient,GOA IM1,CENTRAL GOA,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,1335.04,[],0,1
+Ambient,CBE ECOM,COIMBATORE,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,7958.09,[],0,0
+Ambient,KOC IM1,KOCHI,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,1616.65,[],0,0
+Ambient,KOLKATA ECOM,KOLKATA,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,2,2586.64,[],0,7
+Ambient,BLR IM1,BANGALORE,68254,Chuk 7 Inch Plate Without Lid 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,3671.36,"[MBIPO410364"",""MBIPO413891"",""MBIPO411936"",""MBIPO412448]",160,0
+Ambient,AHM DELHIVERY,AHMEDABAD,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,6285.51,[],0,1
+Ambient,MUM IM3,MUMBAI,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,7089.39,"[CI3PO77345"",""CI3PO79275]",180,4
+Ambient,MUM FC22,MUMBAI,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,1,5620.23,"[CMFPO342433"",""CMFPO344461]",300,16
+Ambient,HYD IM4,HYDERABAD,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,2869.02,[],0,0
+Ambient,PUN DELHIVERY,PUNE,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,6555.78,"[CPDPO293214"",""CPDPO290836]",240,8
+Ambient,DLHY GGNFC5,GURGAON,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,1302.84,[],0,0
+Ambient,KOC IM1,KOCHI,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,5308.38,"[KOCPO126460"",""KOCPO127958]",240,0
+Ambient,KOLKATA ECOM,KOLKATA,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,887.04,[],0,0
+Ambient,BLR IM4,BANGALORE,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,5,4407.48,"[MBEPO40103"",""MBEPO40463]",120,33
+Ambient,BLR IM1,BANGALORE,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,4670.82,"[MBIPO411936"",""MBIPO409537"",""MBIPO412448]",240,1
+Ambient,NAG IM1,NAGPUR,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,1704.78,[],0,0
+Ambient,CHD ECOM,CHANDIGARH,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,2300.76,[PCHPO219267],180,0
+Ambient,VIZ IM1,VIZAG,78553,Chuk Spoon Caddy 32.0 Pieces,Home and Kitchen Needs,Paper Disposable,2000,Non Food,0,3617.46,[VIAPO82820],120,0
+Ambient,MUM FC22,MUMBAI,792937,Chuk 150 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,4548.6,"[CMFPO344461"",""CMFPO342433]",160,2
+Ambient,HYD IM4,HYDERABAD,792937,Chuk 150 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,7301.7,"[CMMPO13936"",""CMMPO13717"",""CMMPO13839]",600,0
+Ambient,PUN DELHIVERY,PUNE,792937,Chuk 150 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,5286.75,"[CPDPO293214"",""CPDPO290836]",200,0
+Ambient,NOI IM1,NOIDA,792937,Chuk 150 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,1,3364.9,[ETPPO82325],120,9
+Ambient,JAI IM1,JAIPUR,792937,Chuk 150 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,1103.9,[],0,1
+Ambient,KOLKATA ECOM,KOLKATA,792937,Chuk 150 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,2480.45,[],0,3
+Ambient,BLR IM4,BANGALORE,792937,Chuk 150 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,4,3531.15,"[MBEPO40463"",""MBEPO40103]",80,25
+Ambient,BLR IM1,BANGALORE,792937,Chuk 150 Ml Bowl 25.0 Pieces,Home and Kitchen Needs,Paper Disposable,1095,Non Food,0,5519.5,"[MBIPO406375"",""MBIPO409099"",""MBIPO410364"",""MBIPO408445]",400,0
