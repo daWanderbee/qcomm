@@ -53,8 +53,14 @@ def classify_csv(header):
 
 def num(v): return (str(v).strip() or '0')
 
+def rating_num(s):
+    """'4+' -> 4.0, '4.5999..' -> 4.6, '' -> None."""
+    s = str(s).strip().rstrip('+')
+    try: return round(float(s), 1)
+    except ValueError: return None
+
 def main():
-    sales, skus, ads, inv = [], {}, [], {}
+    sales, skus, ads, inv, reviews = [], {}, [], {}, []
 
     for path in sorted(glob.glob(os.path.join(RAW, '*'))):
         low = path.lower()
@@ -63,7 +69,27 @@ def main():
             hdr = rows[0]
             names = {v: k for k, v in hdr.items()}            # header text -> col index
             if 'ITEM_CODE' not in names or 'GMV' not in names:
-                print('  skip (unknown xlsx):', os.path.basename(path)); continue
+                # mrp sheet: two blocks (INSTA cols 1-4, BB cols 5-8), header in row 2, RATING per platform
+                flat = ' '.join(v for r in rows[:3] for v in r.values())
+                if 'RATING' in flat and 'MRP' in flat:
+                    skumap = {(v['product_name'] or '').strip().lower(): k for k, v in skus.items()}
+                    for r in rows[2:]:
+                        iname = (r.get(1) or '').strip()
+                        irat = rating_num(r.get(4, ''))
+                        if irat is not None and iname:
+                            # use the SKU code when the name matches sales, else the name itself so
+                            # name() still renders a readable label in the by-product rating view
+                            reviews.append({'platform': 'instamart', 'internal_sku': skumap.get(iname.lower()) or iname,
+                                            'rating': irat, 'review_text': '', 'product_name': iname})
+                        bname = (r.get(5) or '').strip()
+                        brat = rating_num(r.get(8, ''))
+                        if brat is not None and bname:
+                            reviews.append({'platform': 'bigbasket', 'internal_sku': bname,
+                                            'rating': brat, 'review_text': '', 'product_name': bname})
+                    print('  mrp price+rating sheet -> reviews (INSTA + BB ratings):', os.path.basename(path))
+                else:
+                    print('  skip (unknown xlsx):', os.path.basename(path))
+                continue
             for r in rows[1:]:
                 g = lambda name: r.get(names.get(name, -1), '')
                 item = g('ITEM_CODE')
@@ -129,8 +155,10 @@ def main():
     write('skus.csv',  list(skus.values()), ['internal_sku','product_name','category'])
     write('ads.csv',   ads, ['date','platform','spend','impressions','clicks','attributed_sales','keyword','internal_sku'])
     write('inventory.csv', list(inv.values()), ['date','platform','internal_sku','warehouse','stock_on_hand'])
+    write('reviews.csv', reviews, ['platform','internal_sku','rating','review_text','product_name'])
 
     # ponytail: one self-check — dates normalise and columns don't misalign
+    assert rating_num('4+') == 4.0 and rating_num('4.5999999999999996') == 4.6 and rating_num('') is None
     assert iso('46226') == '2026-07-23', iso('46226')
     assert iso('06-05-2026') == '2026-05-06'
     assert iso('2026-06-14 00:00:00') == '2026-06-14'
