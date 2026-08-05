@@ -21,7 +21,7 @@ for f in FEEDS:
 # Inject right before the initial render, bypassing localStorage/sync entirely.
 inject = ('window.__BAKED=' + json.dumps(feeds) +
           ';load=function(f){return window.__BAKED[f]?parseCSV(window.__BAKED[f]):[];};\n')
-marker = "loadAll();renderNav('Overview');renderDomain('Overview');"
+marker = "loadAll();renderNav('Insights');renderDomain('Insights');"
 assert marker in html, 'render marker not found in index.html'
 out = html.replace(marker, inject + marker, 1)
 

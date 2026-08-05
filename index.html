@@ -794,13 +794,13 @@ function renderKeywordVolume(body){
 }
 
 /* ============ dashboard render ============ */
-var DOMAINS=['Overview','Recommendations','Learning','Ingestion','Sales','Marketplace','Geographic','Customer','Keywords','Keyword Volume','Advertising','Pricing','Inventory','Competitors','Content','Profitability','Forecast'];
-var DOM_SUB={Recommendations:'What to do this month, ranked by impact × learned weight',Learning:'How the engine improves from your past actions',Ingestion:'What we ingest, from where, and how','Keyword Volume':'Composite volume index → opportunity → action',Content:'Needs a listing-content feed (images, titles, CTR) — not in monthly CSVs'};
+var DOMAINS=['Insights','Overview','Recommendations','Learning','Ingestion','Sales','Marketplace','Geographic','Customer','Keywords','Keyword Volume','Advertising','Pricing','Inventory','Competitors','Content','Profitability','Forecast'];
+var DOM_SUB={Insights:'The 4 answers on one page — competitors, ROI, keywords, best-sellers',Recommendations:'What to do this month, ranked by impact × learned weight',Learning:'How the engine improves from your past actions',Ingestion:'What we ingest, from where, and how','Keyword Volume':'Composite volume index → opportunity → action',Content:'Needs a listing-content feed (images, titles, CTR) — not in monthly CSVs'};
 function feedsReady(needs){return needs.every(function(f){return f.indexOf('__')===0?false:(D[f]&&D[f].length);});}
 function loadAll(){FEEDS.forEach(function(f){D[f]=load(f);});}
 
 function domCount(dom){
-  if(dom==='Overview'||dom==='Recommendations'||dom==='Learning'||dom==='Ingestion'||dom==='Keyword Volume')return null;
+  if(dom==='Insights'||dom==='Overview'||dom==='Recommendations'||dom==='Learning'||dom==='Ingestion'||dom==='Keyword Volume')return null;
   var qs=REG.filter(function(x){return x.dom===dom;});var ready=qs.filter(function(x){return feedsReady(x.needs);}).length;
   return ready+'/'+qs.length;
 }
@@ -817,6 +817,7 @@ function renderDomain(dom){
   if(!D.sales.length&&dom==='Overview'){
     body.innerHTML='<div class="card" style="padding:40px;text-align:center"><h2 style="margin:0 0 6px">No data yet</h2><p class="subtle">Go to <b>Upload data</b> and add your monthly exports — or load the full sample to see every domain answer at once.</p><div style="margin-top:14px"><button class="btn primary" onclick="go(\'setup\')">Upload data</button></div></div>';return;
   }
+  if(dom==='Insights'){renderInsights(body);return;}
   if(dom==='Overview'){renderOverview(body);return;}
   if(dom==='Recommendations'){body.innerHTML=recommendations();return;}
   if(dom==='Learning'){renderLearning(body);return;}
@@ -841,6 +842,73 @@ function renderDomain(dom){
   }).join('');
   if(restore)restore();
   body.innerHTML=out;
+}
+function renderInsights(body){
+  var S=D.sales||[],C=D.competitors||[],R=D.rank||[],A=D.ads||[];
+  var H=[];
+  if(!S.length&&!C.length){body.innerHTML='<div class="card" style="padding:32px;text-align:center"><h2>No data yet</h2><p class="subtle">Run <b>/scan-keywords</b> or upload feeds to populate this page.</p></div>';return;}
+
+  var totRev=S.reduce(function(s,r){return s+num(r,'revenue');},0);
+  var rankedKw=Object.keys(R.reduce(function(o,r){o[r.keyword]=1;return o;},{})).length;
+  var allKw={};C.forEach(function(r){allKw[r.keyword]=1;});R.forEach(function(r){allKw[r.keyword]=1;});
+  var gaps=Object.keys(allKw).length-rankedKw;
+  var rivals=Object.keys(C.reduce(function(o,r){o[r.competitor]=1;return o;},{})).length;
+  H.push('<div class="kpis">'+kpi('Revenue (mapped)',inrS(totRev),'')+kpi('Keywords you rank',String(rankedKw),'')+
+    kpi('Visibility gaps',String(gaps),'')+kpi('Rivals tracked',String(rivals),'')+'</div>');
+
+  // 1 — COMPETITOR ANALYSIS (search rank = best-seller proxy)
+  H.push('<div class="sec-head"><h2>1 · Competitor analysis</h2><span class="meta">search rank = best-seller proxy · no platform publishes rival unit sales</span></div>');
+  if(C.length){
+    var lb={};C.forEach(function(r){var b=r.competitor||'—';lb[b]=lb[b]||{n:0,kw:{}};lb[b].n++;lb[b].kw[r.keyword]=1;});
+    var lbrows=Object.keys(lb).map(function(b){return{b:b,n:lb[b].n,k:Object.keys(lb[b].kw).length};}).sort(function(a,b){return b.n-a.n;}).slice(0,8);
+    H.push('<div class="card" style="margin-bottom:8px"><b>Top rivals by shelf presence.</b> You rank in <b>'+rankedKw+'</b> keywords — leaders cover more, that’s their edge.</div>');
+    H.push(rTable(['Competitor','Appearances','Keywords covered'],lbrows.map(function(x){return[esc(x.b),String(x.n),String(x.k)];})));
+    var byKw={};C.forEach(function(r){(byKw[r.keyword]=byKw[r.keyword]||[]).push(r);});
+    var myBest={};R.forEach(function(r){var v=num(r,'rank');if(v>0&&(!myBest[r.keyword]||v<myBest[r.keyword]))myBest[r.keyword]=v;});
+    var pr=Object.keys(byKw).map(function(k){
+      var t=byKw[k].slice().sort(function(a,b){return num(a,'rank')-num(b,'rank');})[0];
+      return{kw:k,mine:myBest[k]||0,plat:t.platform,riv:t.competitor,price:t.price,rt:t.rating};
+    }).sort(function(a,b){return(a.mine?1:0)-(b.mine?1:0)||a.mine-b.mine;}).slice(0,14);
+    H.push('<div class="card" style="margin:14px 0 8px"><b>Same keyword — the top-ranked rival and their price</b> (vs your rank)</div>');
+    H.push(rTable(['Keyword','Your rank','Platform','Top rival','Their price','Rating'],pr.map(function(x){
+      return[esc(x.kw),x.mine?'#'+x.mine:'<span class="pill crit">gap</span>',esc(x.plat),esc(x.riv),x.price?inr(+x.price||0):'—',x.rt||'—'];})));
+  } else H.push('<div class="card">'+rNote('No competitor scan yet — run /scan-keywords.')+'</div>');
+
+  // 2 — UP/DOWN PERIODS, ROI 3.5x
+  H.push('<div class="sec-head"><h2>2 · Up/down periods → ROI ≥ 3.5×</h2><span class="meta">ROAS from your ad reports</span></div>');
+  if(A.length){
+    var bp={};A.forEach(function(r){var p=r.platform;bp[p]=bp[p]||{s:0,a:0};bp[p].s+=num(r,'spend');bp[p].a+=num(r,'attributed_sales');});
+    H.push(rTable(['Platform','Spend','Attributed sales','ROAS','Action'],Object.keys(bp).map(function(p){
+      var roas=bp[p].s>0?bp[p].a/bp[p].s:0;return[esc(p),inr(bp[p].s),inr(bp[p].a),roas.toFixed(1)+'×',roas>=3.5?'<span class="pill acc">scale ✓</span>':'<span class="pill warn">fix / cut</span>'];})));
+    var bk={};A.forEach(function(r){if(!r.keyword)return;var k=r.platform+'|'+r.keyword;bk[k]=bk[k]||{s:0,a:0,p:r.platform,kw:r.keyword};bk[k].s+=num(r,'spend');bk[k].a+=num(r,'attributed_sales');});
+    var win=Object.keys(bk).map(function(k){var o=bk[k];return{p:o.p,kw:o.kw,roas:o.s>0?o.a/o.s:0,s:o.s};}).filter(function(x){return x.s>50&&x.roas>=3.5;}).sort(function(a,b){return b.roas-a.roas;}).slice(0,8);
+    if(win.length){H.push('<div class="card" style="margin:14px 0 8px"><b>Keywords already ≥3.5× — scale these in the up-period</b></div>');
+      H.push(rTable(['Platform','Keyword','ROAS','Spend'],win.map(function(x){return[esc(x.p),esc(x.kw),x.roas.toFixed(1)+'×',inr(x.s)];})));}
+    var fk=(typeof festivalKw==='function')?festivalKw():[];
+    H.push('<div class="card note" style="margin-top:8px"><b>Up-period (festivals):</b> '+(fk.length?'push '+fk.slice(0,6).map(function(f){return esc(f.keyword);}).join(', '):'no festival within window')+'. <b>Down-period:</b> hold budget on the ≥3.5× winners and defend rank on your #1 keywords; cut anything under 3.5×.</div>');
+  } else H.push('<div class="card">'+rNote('No ad report loaded — add ads to compute ROAS.')+'</div>');
+
+  // 3 — KEYWORD VOLUME x OPPORTUNITY
+  H.push('<div class="sec-head"><h2>3 · Keyword volume × opportunity</h2><span class="meta">decent volume, where you can still win</span></div>');
+  var eng=(typeof keywordEngine==='function')?keywordEngine():[];
+  if(eng.length){
+    var topOpp=eng.slice().sort(function(a,b){return b.opportunity-a.opportunity;}).slice(0,12);
+    H.push(rTable(['Keyword','Platform','Volume','Your rank','Opp.','Action'],topOpp.map(function(x){
+      return[esc(x.keyword),esc(x.platform),x.volume_index+(x.confidence==='high'?' <span class="pill acc">real</span>':''),
+        (x.rank!==undefined?'#'+Math.round(x.rank):'<span class="pill crit">gap</span>'),String(x.opportunity),'<span class="pill '+actionPillClass(x.action)+'">'+x.action+'</span>'];})));
+  } else H.push('<div class="card">'+rNote('No keyword volume yet.')+'</div>');
+
+  // 4 — BEST SELLERS IN TOP CITIES
+  H.push('<div class="sec-head"><h2>4 · Best-sellers in your top cities</h2><span class="meta">by revenue · city-level</span></div>');
+  if(S.length){
+    var bc={};S.forEach(function(r){if(!r.city)return;var c=r.city;bc[c]=bc[c]||{rev:0,sku:{}};bc[c].rev+=num(r,'revenue');bc[c].sku[r.internal_sku]=(bc[c].sku[r.internal_sku]||0)+num(r,'revenue');});
+    var cities=Object.keys(bc).sort(function(a,b){return bc[b].rev-bc[a].rev;}).slice(0,10);
+    H.push(rTable(['City','#1 best-seller','City revenue'],cities.map(function(c){
+      var sk=bc[c].sku;var top=Object.keys(sk).sort(function(a,b){return sk[b]-sk[a];})[0];
+      return[esc(c),esc(name(top)),inr(bc[c].rev)];})));
+  } else H.push('<div class="card">'+rNote('No sales feed loaded.')+'</div>');
+
+  body.innerHTML=H.join('');
 }
 function renderOverview(body){
   var totRev=D.sales.reduce(function(s,r){return s+num(r,'revenue');},0);
@@ -1007,7 +1075,7 @@ document.getElementById('domBody').addEventListener('click',function(e){
   else if(t.classList.contains('kvfest')){kvFestival=!kvFestival;renderKeywordVolume(document.getElementById('domBody'));}
   else if(t.classList.contains('viewplat')){viewPlatform=t.getAttribute('data-viewplat');var d=document.querySelector('.domlink.active');renderDomain(d?d.getAttribute('data-dom'):'Sales');}
 });
-loadAll();renderNav('Overview');renderDomain('Overview');
+loadAll();renderNav('Insights');renderDomain('Insights');
 
 /* Auto-load any feed CSV committed to the repo data/ folder (zero manual upload). */
 function syncFromRepo(){
