@@ -3,4 +3,7 @@ tools/.apify-token
 .env
 .env.local
 
+# Local Playwright login profile (holds your Swiggy session cookies)
+tools/.pw-profile/
+
 node_modules/
