@@ -376,6 +376,15 @@ var REG=[
   // higher rank number = worse; positive change = losing
   var losing=g.filter(function(x){return x.prev>0&&x.recent>x.prev;}).sort(function(a,b){return(b.recent-b.prev)-(a.recent-a.prev);}).slice(0,8);
   return losing.length?rTable(['Keyword','Was','Now'],losing.map(function(x){return[esc(x.k),'#'+Math.round(x.prev),'<span class="down">#'+Math.round(x.recent)+'</span>'];})):rNote('No keywords lost rank this period. 👍');}},
+{dom:'Keywords',q:'Keywords where you don’t rank (visibility gaps)',needs:['competitors','rank'],run:function(){
+  var searched={};(D.competitors||[]).forEach(function(r){if(r.keyword)searched[r.keyword]=1;});
+  var best={};(D.rank||[]).forEach(function(r){var k=r.keyword,v=num(r,'rank');if(k){if(v>0&&(!best[k]||v<best[k]))best[k]=v;searched[k]=1;}});
+  var kws=Object.keys(searched);if(!kws.length)return rNote('No keyword scan yet. Run tools/collect-bigbasket.mjs (needs APIFY_TOKEN).');
+  var rows=kws.map(function(k){return{kw:k,rank:best[k]||0};}).sort(function(a,b){return(a.rank?1:0)-(b.rank?1:0)||a.rank-b.rank;});
+  var gaps=rows.filter(function(x){return!x.rank;}).length;
+  return'<div class="note" style="margin-bottom:10px">You appear for <b>'+(rows.length-gaps)+'</b> of <b>'+rows.length+'</b> scanned keywords. <b>'+gaps+'</b> are pure competitor territory — you sell these but don’t show up. Fix listings/ads there first.</div>'+
+    rTable(['Keyword','Your best rank','Status'],rows.map(function(x){
+      return[esc(x.kw),x.rank?'#'+x.rank:'—',x.rank?'<span class="pill acc">ranked</span>':'<span class="pill crit">not listed</span>'];}));}},
 {dom:'Keywords',q:'Rising CPC (getting expensive)',needs:['ads'],run:function(){
   var g=growth(D.ads,function(r){return r.keyword;},function(r){return num(r,'spend');});if(!g)return null;
   var up=g.filter(function(x){return x.k&&x.prev>0&&x.pct>0.1;}).sort(function(a,b){return b.pct-a.pct;}).slice(0,6);

@@ -29,6 +29,16 @@ jobs:
             --depth 1 > data/keyword_volume.csv
           echo "keyword rows: $(($(wc -l < data/keyword_volume.csv) - 1))"
 
+      - name: BigBasket rank + competitors (Apify, free-tier, cost-capped)
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        run: |
+          if [ -n "$APIFY_TOKEN" ]; then
+            node tools/collect-bigbasket.mjs --seeds data/seeds.txt --brand Chuk --per-kw 20 --max-cost 1.5
+          else
+            echo "no APIFY_TOKEN secret set — skipping BigBasket collection (add the secret to enable)"
+          fi
+
       # --- Optional: rented competitor/rank data ---------------------------------
       # Add a QCA_API_KEY repo secret and a tools/collect-qca.mjs script, then
       # uncomment. Secrets aren't readable in `if:`, so gate via an env var.
