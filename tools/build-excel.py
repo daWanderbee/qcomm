@@ -57,12 +57,31 @@ if len(sales):
     g = g[g.city.isin(top_cities)].sort_values(['city', 'revenue'], ascending=[True, False])
     sheets['BestSellers_byCity'] = g.groupby('city').head(5)
 
-# 4) Keyword opportunities — volume signal (ad impressions) + your ad spend (Q3)
+# 4) Keyword opportunity — your preference: DECENT volume + MODERATE bid (Q3)
+if len(ads) and 'keyword' in ads:
+    a = ads[ads['keyword'].astype(str).str.strip() != ''].copy()
+    if len(a):
+        a['volume'] = numcol(a, 'impressions'); a['bid_spend'] = numcol(a, 'spend'); a['sales'] = numcol(a, 'attributed_sales')
+        g = a.groupby(['platform', 'keyword'], as_index=False).agg(volume=('volume', 'sum'), bid_spend=('bid_spend', 'sum'), sales=('sales', 'sum'))
+        g['roas'] = (g['sales'] / g['bid_spend'].replace(0, pd.NA)).round(2)
+        if len(rank):
+            rk = rank.copy(); rk['rk'] = pd.to_numeric(rk['rank'], errors='coerce')
+            g = g.merge(rk.groupby(['platform', 'keyword'])['rk'].min().reset_index().rename(columns={'rk': 'your_rank'}), on=['platform', 'keyword'], how='left')
+        # decent volume = at/above median; moderate bid = middle half of spend (not cheapest, not priciest)
+        vmed = g['volume'].median(); q1, q3 = g['bid_spend'].quantile(.25), g['bid_spend'].quantile(.75)
+        g['decent_volume'] = g['volume'] >= vmed
+        g['moderate_bid'] = g['bid_spend'].between(q1, q3)
+        g['PREFERRED'] = g['decent_volume'] & g['moderate_bid']
+        g = g.sort_values(['PREFERRED', 'roas', 'volume'], ascending=[False, False, False])
+        cols = ['platform', 'keyword', 'volume', 'bid_spend', 'roas'] + (['your_rank'] if 'your_rank' in g else []) + ['decent_volume', 'moderate_bid', 'PREFERRED']
+        sheets['Keyword_Opportunity'] = g[cols]
+
+# broad volume signal from the collector (trimmed to top 40/platform, not a full dump)
 if len(kv):
     k = kv.copy()
     k['ad_impressions'] = numcol(k, 'ad_impressions'); k['autocomplete_rank'] = numcol(k, 'autocomplete_rank')
     sheets['Keyword_Volume'] = (k.sort_values(['platform', 'ad_impressions'], ascending=[True, False])
-        [['platform', 'keyword', 'ad_impressions', 'autocomplete_rank']])
+        .groupby('platform').head(40)[['platform', 'keyword', 'ad_impressions', 'autocomplete_rank']])
 
 # 5) Competitor leaderboard — who shows up most / best avg rank (Q1)
 if len(comp):
