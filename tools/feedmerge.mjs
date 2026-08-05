@@ -24,6 +24,8 @@ function parse(t){
   return rows.filter(r => r.some(x => x !== '')).map(r => Object.fromEntries(h.map((k, j) => [k, (r[j] || '').trim()])));
 }
 
+export function readCsv(file){ return fs.existsSync(file) ? parse(fs.readFileSync(file, 'utf8')) : []; }
+
 // Replace this platform's rows in `file` with `rows`; keep every other platform untouched.
 export function mergeWrite(file, platform, rows, cols){
   const keep = fs.existsSync(file) ? parse(fs.readFileSync(file, 'utf8')).filter(r => r.platform !== platform) : [];
