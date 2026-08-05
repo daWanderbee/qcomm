@@ -23,6 +23,18 @@ APIFY_TOKEN="$TOKEN" node tools/collect-bigbasket.mjs --brand Chuk --per-kw 20 -
 ```
 Writes `data/rank.csv` (where Chuk ranks) and `data/competitors.csv`.
 
+## 2b. Instamart rank + competitors (real, city-specific)
+Requires the user to have approved the Instamart actor's full-access permission once in their Apify
+console (they did so consciously). If it errors "not approved", tell them to approve at
+https://console.apify.com/actors/sEPEiWvzfhXTdTkoo?approvePermissions=true and skip this step.
+```bash
+APIFY_TOKEN="$TOKEN" node tools/collect-instamart.mjs --brand Chuk --city Bangalore --per-kw 20 --max-cost 1.5 --seeds data/seeds.txt
+# or --keywords "<arguments>" for an ad-hoc scan
+```
+Merges instamart rows into the same rank.csv / competitors.csv (BigBasket rows are preserved).
+Instamart is ~$0.005/result (pricier than BigBasket) — keep --max-cost ≤ 1.5. Default city Bangalore
+(her top-GMV city); change --city to scan another.
+
 ## 3. Keyword volume — free (Google autocomplete + upcoming festivals)
 ```bash
 node tools/collect-keywords.mjs --seeds data/seeds.txt --festivals data/festivals.csv \

@@ -14,22 +14,11 @@
 // ponytail: per-keyword run-sync calls (simple, ~12s each). Batch via --batch if 40+ keywords make it slow.
 
 import fs from 'node:fs';
+import { mergeWrite, classify } from './feedmerge.mjs';
 
 const ACTOR = 'fascinating_lentil~bigbasket-grocery-scraper';
 const PRICE_PER_RESULT = 0.002;                 // USD, from the actor's pricing
 const API = t => `https://api.apify.com/v2/acts/${ACTOR}/run-sync-get-dataset-items?token=${t}`;
-
-function csvCell(s){ s = String(s ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
-
-// pure + testable: split a keyword's results into "yours" vs competitors by brand/title match
-export function classify(items, brand){
-  const rx = new RegExp(brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-  const mine = [], comp = [];
-  for (const x of items){
-    (rx.test((x.brand || '') + ' ' + (x.title || '')) ? mine : comp).push(x);
-  }
-  return { mine, comp };
-}
 
 function parseArgs(argv){
   // batch=1: one keyword per actor call so each keyword gets its OWN result budget.
@@ -106,13 +95,9 @@ async function main(){
     }
   }
 
-  const write = (name, rows, cols) => {
-    fs.writeFileSync('data/' + name,
-      cols.join(',') + '\n' + rows.map(r => cols.map(c => csvCell(r[c])).join(',')).join('\n') + '\n');
-    process.stderr.write('wrote data/' + name + ' (' + rows.length + ' rows)\n');
-  };
-  write('rank.csv', rankRows, ['date', 'platform', 'keyword', 'rank', 'product']);
-  write('competitors.csv', compRows, ['platform', 'competitor', 'product', 'price', 'rating', 'rank', 'keyword', 'date']);
+  const r1 = mergeWrite('data/rank.csv', 'bigbasket', rankRows, ['date', 'platform', 'keyword', 'rank', 'product']);
+  const r2 = mergeWrite('data/competitors.csv', 'bigbasket', compRows, ['platform', 'competitor', 'product', 'price', 'rating', 'rank', 'keyword', 'date']);
+  process.stderr.write('rank.csv +' + r1.added + ' bigbasket (kept ' + r1.kept + ' other) · competitors.csv +' + r2.added + '\n');
   process.stderr.write('done. ~' + spent + ' results ≈ $' + (spent * PRICE_PER_RESULT).toFixed(2) + ' of your Apify credit.\n');
 }
 

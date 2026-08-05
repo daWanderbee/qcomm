@@ -39,6 +39,17 @@ jobs:
             echo "no APIFY_TOKEN secret set — skipping BigBasket collection (add the secret to enable)"
           fi
 
+      - name: Instamart rank + competitors (Apify, needs actor approval)
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        run: |
+          if [ -n "$APIFY_TOKEN" ]; then
+            node tools/collect-instamart.mjs --seeds data/seeds.txt --brand Chuk --city Bangalore --per-kw 15 --max-cost 1.5 \
+              || echo "Instamart skipped (actor not approved yet — approve once in the Apify console)"
+          else
+            echo "no APIFY_TOKEN secret set — skipping Instamart collection"
+          fi
+
       # --- Optional: rented competitor/rank data ---------------------------------
       # Add a QCA_API_KEY repo secret and a tools/collect-qca.mjs script, then
       # uncomment. Secrets aren't readable in `if:`, so gate via an env var.
