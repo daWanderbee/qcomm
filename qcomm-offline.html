@@ -844,25 +844,42 @@ function renderDomain(dom){
   body.innerHTML=out;
 }
 function renderInsights(body){
-  var S=D.sales||[],C=D.competitors||[],R=D.rank||[],A=D.ads||[];
+  var S0=D.sales||[],C0=D.competitors||[],R0=D.rank||[],A0=D.ads||[],RV0=D.reviews||[],INV0=D.inventory||[],PRC0=D.pricing||[];
   var H=[];
-  if(!S.length&&!C.length){body.innerHTML='<div class="card" style="padding:32px;text-align:center"><h2>No data yet</h2><p class="subtle">Run <b>/scan-keywords</b> or upload feeds to populate this page.</p></div>';return;}
-
-  var totRev=S.reduce(function(s,r){return s+num(r,'revenue');},0);
-  var rankedKw=Object.keys(R.reduce(function(o,r){o[r.keyword]=1;return o;},{})).length;
+  if(!S0.length&&!C0.length){body.innerHTML='<div class="card" style="padding:32px;text-align:center"><h2>No data yet</h2><p class="subtle">Run <b>/scan-keywords</b> or upload feeds to populate this page.</p></div>';return;}
+  // platform toggle (Swiggy/Instamart, BigBasket, Blinkit… separated) — reuses the global viewPlatform
+  var pAll={};[S0,C0,R0,A0,RV0,INV0,PRC0].forEach(function(a){a.forEach(function(r){if(r.platform)pAll[r.platform]=1;});});
+  var plist=Object.keys(pAll);
+  if(viewPlatform!=='All'&&plist.indexOf(viewPlatform)<0)viewPlatform='All';
+  function F(a){return viewPlatform==='All'?a:a.filter(function(r){return r.platform===viewPlatform;});}
+  var S=F(S0),C=F(C0),R=F(R0),A=F(A0),RV=F(RV0),INV=F(INV0),PRC=F(PRC0),one=viewPlatform!=='All';
+  function grp(a,kf,vf){var o={};a.forEach(function(r){var k=kf(r);if(k==null||k==='')return;o[k]=(o[k]||0)+vf(r);});return o;}
+  function items(o,disp){return Object.keys(o).map(function(k){return{label:k,v:o[k],disp:disp?disp(o[k]):inrS(o[k])};}).sort(function(a,b){return b.v-a.v;});}
+  function bars(it){if(!it||!it.length)return rNote('No data');var mx=Math.max.apply(null,it.map(function(x){return x.v;}))||1;return it.map(function(x){return'<div class="bar-row"><span class="name">'+esc(x.label)+'</span><span class="track"><span class="fill" style="width:'+Math.max(3,x.v/mx*100).toFixed(0)+'%"></span></span><span class="r num">'+(x.disp!=null?x.disp:inrS(x.v))+'</span></div>';}).join('');}
+  function chart(t,sub,it){return'<div class="card" style="padding:16px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px"><b>'+t+'</b><span class="subtle" style="font-size:12px">'+(sub||'')+'</span></div>'+bars(it)+'</div>';}
+  var rankedKw=Object.keys(grp(R,function(r){return r.keyword;},function(){return 1;})).length;
   var allKw={};C.forEach(function(r){allKw[r.keyword]=1;});R.forEach(function(r){allKw[r.keyword]=1;});
   var gaps=Object.keys(allKw).length-rankedKw;
-  var rivals=Object.keys(C.reduce(function(o,r){o[r.competitor]=1;return o;},{})).length;
-  H.push('<div class="kpis">'+kpi('Revenue (mapped)',inrS(totRev),'')+kpi('Keywords you rank',String(rankedKw),'')+
-    kpi('Visibility gaps',String(gaps),'')+kpi('Rivals tracked',String(rivals),'')+'</div>');
+  H.push('<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">'+['All'].concat(plist).map(function(p){return'<button class="btn viewplat'+(p===viewPlatform?' primary':'')+'" data-viewplat="'+esc(p)+'" style="padding:6px 12px;font-size:12px">'+(p==='All'?'All platforms':esc(p))+'</button>';}).join('')+'</div>');
+  var totRev=S.reduce(function(s,r){return s+num(r,'revenue');},0);
+  var spend=A.reduce(function(s,r){return s+num(r,'spend');},0),attr=A.reduce(function(s,r){return s+num(r,'attributed_sales');},0),roasK=spend>0?attr/spend:0;
+  var rts=RV.map(function(r){return num(r,'rating');}).filter(function(x){return x>0;}),avgRt=rts.length?rts.reduce(function(a,b){return a+b;},0)/rts.length:0;
+  var stockout=INV.filter(function(r){return num(r,'stock_on_hand')<=0;}).length;
+  H.push('<div class="kpis">'+kpi('Revenue',inrS(totRev),'')+kpi('ROAS',roasK?roasK.toFixed(1)+'×':'—',roasK?(roasK>=3.5?'≥ 3.5× ✓':'below target'):'')+kpi('Avg rating',avgRt?avgRt.toFixed(1)+'★':'—',rts.length?rts.length+' rated':'')+kpi('Keywords ranked',String(rankedKw),gaps>0?gaps+' gaps':'')+kpi('Out of stock',String(stockout),'')+'</div>');
+  H.push('<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:18px">');
+  H.push(one?chart('Revenue by city','₹ '+esc(viewPlatform),items(grp(S,function(r){return r.city;},function(r){return num(r,'revenue');})).slice(0,8)):chart('Revenue by platform','GMV split',items(grp(S,function(r){return r.platform;},function(r){return num(r,'revenue');}))));
+  H.push(chart('Monthly revenue',one?esc(viewPlatform):'all',items(grp(S,function(r){return(r.date||'').slice(0,7);},function(r){return num(r,'revenue');})).sort(function(a,b){return a.label<b.label?-1:1;})));
+  var rp={};A0.forEach(function(r){var p=r.platform;rp[p]=rp[p]||{s:0,a:0};rp[p].s+=num(r,'spend');rp[p].a+=num(r,'attributed_sales');});
+  H.push(chart('ROAS by platform','target ≥ 3.5×',Object.keys(rp).map(function(p){var v=rp[p].s>0?rp[p].a/rp[p].s:0;return{label:p,v:v,disp:v.toFixed(1)+'×'};}).sort(function(a,b){return b.v-a.v;})));
+  if(RV0.length){var rbp={};RV0.forEach(function(r){var p=r.platform;rbp[p]=rbp[p]||{s:0,n:0};rbp[p].s+=num(r,'rating');rbp[p].n++;});H.push(chart('Avg rating by platform','from reviews',Object.keys(rbp).map(function(p){var v=rbp[p].n?rbp[p].s/rbp[p].n:0;return{label:p,v:v,disp:v.toFixed(2)+'★'};}).sort(function(a,b){return b.v-a.v;})));}
+  H.push('</div>');
 
   // 1 — COMPETITOR ANALYSIS (search rank = best-seller proxy)
   H.push('<div class="sec-head"><h2>1 · Competitor analysis</h2><span class="meta">search rank = best-seller proxy · no platform publishes rival unit sales</span></div>');
   if(C.length){
     var lb={};C.forEach(function(r){var b=r.competitor||'—';lb[b]=lb[b]||{n:0,kw:{}};lb[b].n++;lb[b].kw[r.keyword]=1;});
     var lbrows=Object.keys(lb).map(function(b){return{b:b,n:lb[b].n,k:Object.keys(lb[b].kw).length};}).sort(function(a,b){return b.n-a.n;}).slice(0,8);
-    H.push('<div class="card" style="margin-bottom:8px"><b>Top rivals by shelf presence.</b> You rank in <b>'+rankedKw+'</b> keywords — leaders cover more, that’s their edge.</div>');
-    H.push(rTable(['Competitor','Appearances','Keywords covered'],lbrows.map(function(x){return[esc(x.b),String(x.n),String(x.k)];})));
+    H.push(chart('Top rivals by shelf presence','appearances · you rank in '+rankedKw+' keywords',lbrows.map(function(x){return{label:x.b+' — '+x.k+' kw',v:x.n,disp:String(x.n)};})));
     var byKw={};C.forEach(function(r){(byKw[r.keyword]=byKw[r.keyword]||[]).push(r);});
     var myBest={};R.forEach(function(r){var v=num(r,'rank');if(v>0&&(!myBest[r.keyword]||v<myBest[r.keyword]))myBest[r.keyword]=v;});
     var pr=Object.keys(byKw).map(function(k){
@@ -891,22 +908,29 @@ function renderInsights(body){
   // 3 — KEYWORD VOLUME x OPPORTUNITY
   H.push('<div class="sec-head"><h2>3 · Keyword volume × opportunity</h2><span class="meta">decent volume, where you can still win</span></div>');
   var eng=(typeof keywordEngine==='function')?keywordEngine():[];
+  if(one)eng=eng.filter(function(x){return String(x.platform).toLowerCase()===viewPlatform.toLowerCase();});
   if(eng.length){
+    H.push('<div style="margin-bottom:12px">'+chart('Highest-volume keywords',one?esc(viewPlatform):'top across apps',eng.slice().sort(function(a,b){return b.volume_index-a.volume_index;}).slice(0,8).map(function(x){return{label:x.keyword+(one?'':' · '+x.platform),v:x.volume_index,disp:String(x.volume_index)};}))+'</div>');
     var topOpp=eng.slice().sort(function(a,b){return b.opportunity-a.opportunity;}).slice(0,12);
     H.push(rTable(['Keyword','Platform','Volume','Your rank','Opp.','Action'],topOpp.map(function(x){
       return[esc(x.keyword),esc(x.platform),x.volume_index+(x.confidence==='high'?' <span class="pill acc">real</span>':''),
         (x.rank!==undefined?'#'+Math.round(x.rank):'<span class="pill crit">gap</span>'),String(x.opportunity),'<span class="pill '+actionPillClass(x.action)+'">'+x.action+'</span>'];})));
   } else H.push('<div class="card">'+rNote('No keyword volume yet.')+'</div>');
 
-  // 4 — BEST SELLERS IN TOP CITIES
-  H.push('<div class="sec-head"><h2>4 · Best-sellers in your top cities</h2><span class="meta">by revenue · city-level</span></div>');
-  if(S.length){
-    var bc={};S.forEach(function(r){if(!r.city)return;var c=r.city;bc[c]=bc[c]||{rev:0,sku:{}};bc[c].rev+=num(r,'revenue');bc[c].sku[r.internal_sku]=(bc[c].sku[r.internal_sku]||0)+num(r,'revenue');});
-    var cities=Object.keys(bc).sort(function(a,b){return bc[b].rev-bc[a].rev;}).slice(0,10);
-    H.push(rTable(['City','#1 best-seller','City revenue'],cities.map(function(c){
-      var sk=bc[c].sku;var top=Object.keys(sk).sort(function(a,b){return sk[b]-sk[a];})[0];
-      return[esc(c),esc(name(top)),inr(bc[c].rev)];})));
-  } else H.push('<div class="card">'+rNote('No sales feed loaded.')+'</div>');
+  // 4 — BEST SELLERS, STOCK & PRICE
+  H.push('<div class="sec-head"><h2>4 · Best-sellers, stock &amp; price</h2><span class="meta">where you make money</span></div>');
+  H.push('<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:14px">');
+  H.push(chart('Top cities by revenue','',items(grp(S.filter(function(r){return r.city;}),function(r){return r.city;},function(r){return num(r,'revenue');})).slice(0,10)));
+  H.push(chart('Revenue by category','',items(grp(S,function(r){var m=(D.skus||[]).find(function(s){return s.internal_sku===r.internal_sku;});return m?m.category:'other';},function(r){return num(r,'revenue');})).slice(0,8)));
+  H.push('</div>');
+  var bc={};S.forEach(function(r){if(!r.city)return;var c=r.city;bc[c]=bc[c]||{rev:0,sku:{}};bc[c].rev+=num(r,'revenue');bc[c].sku[r.internal_sku]=(bc[c].sku[r.internal_sku]||0)+num(r,'revenue');});
+  var cities=Object.keys(bc).sort(function(a,b){return bc[b].rev-bc[a].rev;}).slice(0,10);
+  if(cities.length)H.push(rTable(['City','#1 best-seller','City revenue'],cities.map(function(c){var sk=bc[c].sku;var top=Object.keys(sk).sort(function(a,b){return sk[b]-sk[a];})[0];return[esc(c),esc(name(top)),inr(bc[c].rev)];})));
+  if(INV.length){var zc=INV.filter(function(r){return num(r,'stock_on_hand')<=0;});
+    H.push('<div class="card" style="margin-top:12px"><b>⚠️ Out of stock — '+zc.length+' SKU·warehouse</b>'+(zc.length?rTable(['Product','Warehouse'],zc.slice(0,6).map(function(r){return[esc(name(r.internal_sku)),esc(r.warehouse||r.platform)];})):'<div class="subtle">All stocked 👍</div>')+'</div>');}
+  if(PRC.length){var disc=PRC.map(function(r){var m=num(r,'mrp'),s=num(r,'sp');return{n:r.product,d:m>0?(m-s)/m*100:0};}).filter(function(x){return x.d>0;}).sort(function(a,b){return b.d-a.d;});
+    var avgD=disc.length?disc.reduce(function(a,b){return a+b.d;},0)/disc.length:0;
+    if(disc.length)H.push('<div style="margin-top:14px">'+chart('Deepest discounts (MRP → SP)','avg '+avgD.toFixed(0)+'% off',disc.slice(0,8).map(function(x){return{label:x.n,v:x.d,disp:x.d.toFixed(0)+'%'};}))+'</div>');}
 
   body.innerHTML=H.join('');
 }
