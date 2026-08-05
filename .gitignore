@@ -1,0 +1,6 @@
+# Secrets — never commit (repo is public)
+tools/.apify-token
+.env
+.env.local
+
+node_modules/

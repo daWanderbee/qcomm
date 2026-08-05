@@ -32,11 +32,12 @@ export function classify(items, brand){
 }
 
 function parseArgs(argv){
-  const o = { seedsFile: 'data/seeds.txt', brand: 'Chuk', perKw: 20, batch: 5, maxCost: 3,
+  const o = { seedsFile: 'data/seeds.txt', keywords: null, brand: 'Chuk', perKw: 20, batch: 5, maxCost: 3,
               today: new Date().toISOString().slice(0, 10), selfTest: false };
   for (let i = 0; i < argv.length; i++){
     const a = argv[i];
     if (a === '--seeds') o.seedsFile = argv[++i];
+    else if (a === '--keywords') o.keywords = argv[++i].split(',').map(s => s.trim()).filter(Boolean);  // ad-hoc inline scan
     else if (a === '--brand') o.brand = argv[++i];
     else if (a === '--per-kw') o.perKw = parseInt(argv[++i], 10) || 20;
     else if (a === '--batch') o.batch = parseInt(argv[++i], 10) || 5;
@@ -77,7 +78,7 @@ async function main(){
   const token = process.env.APIFY_TOKEN;
   if (!token){ process.stderr.write('No APIFY_TOKEN in env. Set it (GitHub secret in cron) and retry.\n'); process.exit(1); }
 
-  const seeds = fs.readFileSync(o.seedsFile, 'utf8').split('\n').map(s => s.trim()).filter(Boolean);
+  const seeds = o.keywords || fs.readFileSync(o.seedsFile, 'utf8').split('\n').map(s => s.trim()).filter(Boolean);
   const budgetResults = Math.floor(o.maxCost / PRICE_PER_RESULT);   // hard cap: never spend past --max-cost
   let spent = 0;
   const rankRows = [], compRows = [];
