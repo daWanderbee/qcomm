@@ -32,7 +32,9 @@ export function classify(items, brand){
 }
 
 function parseArgs(argv){
-  const o = { seedsFile: 'data/seeds.txt', keywords: null, brand: 'Chuk', perKw: 20, batch: 5, maxCost: 3,
+  // batch=1: one keyword per actor call so each keyword gets its OWN result budget.
+  // Batching shares maxResults across the group, which starves later keywords (false "absent").
+  const o = { seedsFile: 'data/seeds.txt', keywords: null, brand: 'Chuk', perKw: 20, batch: 1, maxCost: 3,
               today: new Date().toISOString().slice(0, 10), selfTest: false };
   for (let i = 0; i < argv.length; i++){
     const a = argv[i];
@@ -100,7 +102,7 @@ async function main(){
         rankRows.push({ date: o.today, platform: 'bigbasket', keyword: kw, rank: x.position, product: x.title });
       for (const x of comp)
         compRows.push({ platform: 'bigbasket', competitor: x.brand || '—', product: x.title,
-                        price: x.price ?? '', rating: x.rating ?? '', keyword: kw, date: o.today });
+                        price: x.price ?? '', rating: x.rating ?? '', rank: x.position ?? '', keyword: kw, date: o.today });
     }
   }
 
@@ -110,7 +112,7 @@ async function main(){
     process.stderr.write('wrote data/' + name + ' (' + rows.length + ' rows)\n');
   };
   write('rank.csv', rankRows, ['date', 'platform', 'keyword', 'rank', 'product']);
-  write('competitors.csv', compRows, ['platform', 'competitor', 'product', 'price', 'rating', 'keyword', 'date']);
+  write('competitors.csv', compRows, ['platform', 'competitor', 'product', 'price', 'rating', 'rank', 'keyword', 'date']);
   process.stderr.write('done. ~' + spent + ' results ≈ $' + (spent * PRICE_PER_RESULT).toFixed(2) + ' of your Apify credit.\n');
 }
 

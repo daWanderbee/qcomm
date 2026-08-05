@@ -36,9 +36,12 @@ python tools/make-offline.py
 ```
 (The hosted app auto-loads the CSVs on its own; this only refreshes the local `qcomm-offline.html`.)
 
-## 5. Report to the user
-- **Where you rank vs gaps**: from `rank.csv`, which keywords Chuk appears for and their best rank; from `competitors.csv`, keywords that returned competitors but **no** Chuk row = visibility gaps (you sell it, you don't show up).
-- **Top competitor brands** across the scan.
+## 5. Report to the user — SHOW THIS IN CHAT
+Run the report tool and paste/summarise its output into the chat (this is the whole point — results in chat, not just the app):
+```bash
+node tools/scan-report.mjs
+```
+It prints, per keyword: your best rank vs ABSENT, who owns the top 3, a ranked/gaps summary, the "fix first" gap list, and top rival brands. Then add:
 - **Keyword volume** row count and any **upcoming festival keywords** added this run.
 - **Apify spend**: `rows_saved × $0.002`, and that it stays inside the free credit.
 - Remind: run `git push origin master` (via the `!` prefix) to publish the refresh to the hosted app.
