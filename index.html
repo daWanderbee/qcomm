@@ -917,6 +917,14 @@ function renderInsights(body){
     H.push(rTable(['Keyword','Platform','Volume','Your rank','Opp.','Action'],topOpp.map(function(x){
       return[esc(x.keyword),esc(x.platform),x.volume_index+(x.confidence==='high'?' <span class="pill acc">real</span>':''),
         (x.rank!==undefined?'#'+Math.round(x.rank):'<span class="pill crit">gap</span>'),String(x.opportunity),'<span class="pill '+actionPillClass(x.action)+'">'+x.action+'</span>'];})));
+    // 🎯 Easy wins: real competitor density is low AND you don't rank — cheapest shelf to grab
+    var easy=eng.filter(function(x){return x.competition>0&&x.action==='Attack';}).sort(function(a,b){return a.competition-b.competition||b.opportunity-a.opportunity;}).slice(0,12);
+    if(easy.length){
+      H.push('<div class="sec-head" style="margin-top:10px"><h2>🎯 Easy wins — low competition &amp; you don’t rank</h2><span class="meta">from live competitor density</span></div>');
+      H.push('<div class="card note" style="margin-bottom:8px">Few rivals show up for these <b>and</b> you’re absent/weak — the cheapest keywords to grab. List + push rank here first (many are festival terms in season).</div>');
+      H.push(rTable(['Keyword','Platform','Rivals','Your rank','Volume','Action'],easy.map(function(x){
+        return[esc(x.keyword),esc(x.platform),'<b>'+x.competition+'</b>',(x.rank!==undefined?'#'+Math.round(x.rank):'<span class="pill crit">gap</span>'),String(x.volume_index),'<span class="pill '+actionPillClass(x.action)+'">'+x.action+'</span>'];})));
+    }
   } else H.push('<div class="card">'+rNote('No keyword volume yet.')+'</div>');
 
   // 4 — BEST SELLERS, STOCK & PRICE
