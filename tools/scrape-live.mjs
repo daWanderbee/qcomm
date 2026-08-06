@@ -9,7 +9,7 @@
 
 import fs from 'node:fs';
 import { chromium } from 'playwright';
-import { mergeWrite, classify, readCsv } from './feedmerge.mjs';
+import { mergeWrite, classify, readCsv, festivalKeywords } from './feedmerge.mjs';
 
 const enc = encodeURIComponent;
 const PLATFORMS = {
@@ -32,6 +32,11 @@ const KEEP = A.includes('--fill-gaps');
 const seeds = A.includes('--keywords')
   ? arg('--keywords', '').split(',').map(s => s.trim()).filter(Boolean)
   : fs.readFileSync(arg('--seeds', 'data/seeds.txt'), 'utf8').split('\n').map(s => s.trim()).filter(Boolean);
+if (A.includes('--festivals')){                       // also scrape upcoming festival keywords
+  const fk = festivalKeywords(arg('--festivals', 'data/festivals.csv'), +arg('--festival-window', 60));
+  const add = fk.keywords.filter(k => !seeds.includes(k));
+  if (add.length){ seeds.push(...add); process.stderr.write('+ ' + add.length + ' festival keyword(s) [' + fk.names.join(', ') + ']\n'); }
+}
 
 const num = s => { const n = Number(String(s ?? '').replace(/[^\d.]/g, '')); return isNaN(n) ? '' : n; };
 function imItems(json){ const out = []; const cards = json?.data?.cards; if (Array.isArray(cards)) for (const c of cards){ const l = c?.card?.card?.gridElements?.infoWithStyle?.items; if (Array.isArray(l)) out.push(...l); } return out; }

@@ -34,7 +34,7 @@ jobs:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
         run: |
           if [ -n "$APIFY_TOKEN" ]; then
-            node tools/collect-bigbasket.mjs --seeds data/seeds.txt --brand Chuk --per-kw 20 --max-cost 1.5
+            node tools/collect-bigbasket.mjs --seeds data/seeds.txt --brand Chuk --per-kw 20 --max-cost 1.5 --festivals data/festivals.csv
           else
             echo "no APIFY_TOKEN secret set — skipping BigBasket collection (add the secret to enable)"
           fi

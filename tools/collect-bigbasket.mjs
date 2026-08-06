@@ -14,7 +14,7 @@
 // ponytail: per-keyword run-sync calls (simple, ~12s each). Batch via --batch if 40+ keywords make it slow.
 
 import fs from 'node:fs';
-import { mergeWrite, classify } from './feedmerge.mjs';
+import { mergeWrite, classify, festivalKeywords } from './feedmerge.mjs';
 
 const ACTOR = 'fascinating_lentil~bigbasket-grocery-scraper';
 const PRICE_PER_RESULT = 0.002;                 // USD, from the actor's pricing
@@ -24,11 +24,13 @@ function parseArgs(argv){
   // batch=1: one keyword per actor call so each keyword gets its OWN result budget.
   // Batching shares maxResults across the group, which starves later keywords (false "absent").
   const o = { seedsFile: 'data/seeds.txt', keywords: null, brand: 'Chuk', perKw: 20, batch: 1, maxCost: 3,
-              today: new Date().toISOString().slice(0, 10), selfTest: false };
+              today: new Date().toISOString().slice(0, 10), festivals: null, festWindow: 60, selfTest: false };
   for (let i = 0; i < argv.length; i++){
     const a = argv[i];
     if (a === '--seeds') o.seedsFile = argv[++i];
     else if (a === '--keywords') o.keywords = argv[++i].split(',').map(s => s.trim()).filter(Boolean);  // ad-hoc inline scan
+    else if (a === '--festivals') o.festivals = argv[++i];
+    else if (a === '--festival-window') o.festWindow = parseInt(argv[++i], 10) || 60;
     else if (a === '--brand') o.brand = argv[++i];
     else if (a === '--per-kw') o.perKw = parseInt(argv[++i], 10) || 20;
     else if (a === '--batch') o.batch = parseInt(argv[++i], 10) || 5;
@@ -70,6 +72,11 @@ async function main(){
   if (!token){ process.stderr.write('No APIFY_TOKEN in env. Set it (GitHub secret in cron) and retry.\n'); process.exit(1); }
 
   const seeds = o.keywords || fs.readFileSync(o.seedsFile, 'utf8').split('\n').map(s => s.trim()).filter(Boolean);
+  if (o.festivals){                                    // also scrape upcoming festival keywords
+    const fk = festivalKeywords(o.festivals, o.festWindow);
+    const add = fk.keywords.filter(k => !seeds.includes(k));
+    if (add.length){ seeds.push(...add); process.stderr.write('+ ' + add.length + ' festival keyword(s) [' + fk.names.join(', ') + ']\n'); }
+  }
   const budgetResults = Math.floor(o.maxCost / PRICE_PER_RESULT);   // hard cap: never spend past --max-cost
   let spent = 0;
   const rankRows = [], compRows = [];

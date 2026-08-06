@@ -26,6 +26,20 @@ function parse(t){
 
 export function readCsv(file){ return fs.existsSync(file) ? parse(fs.readFileSync(file, 'utf8')) : []; }
 
+// Upcoming festival keywords from data/festivals.csv (date,name,keywords with ';'-separated keywords):
+// pick festivals whose date is within [today, today+windowDays] and return their keyword modifiers.
+export function festivalKeywords(file, windowDays = 60, today = new Date()){
+  const horizon = new Date(today.getTime() + windowDays * 864e5);
+  const kws = [], names = [];
+  for (const r of readCsv(file)){
+    const d = new Date(r.date);
+    if (isNaN(d) || d < today || d > horizon || !r.keywords) continue;
+    names.push(r.name + ' (' + r.date + ')');
+    for (const k of String(r.keywords).split(';').map(s => s.trim()).filter(Boolean)) kws.push(k);
+  }
+  return { keywords: [...new Set(kws)], names };
+}
+
 // Replace this platform's rows in `file` with `rows`; keep every other platform untouched.
 export function mergeWrite(file, platform, rows, cols){
   const keep = fs.existsSync(file) ? parse(fs.readFileSync(file, 'utf8')).filter(r => r.platform !== platform) : [];
