@@ -33,12 +33,17 @@ if len(comp) or len(rank):
             ck = pc[pc.keyword == k].copy()
             ck['rnk'] = pd.to_numeric(ck['rank'], errors='coerce')
             top = ck.sort_values('rnk').head(1)
+            n = len(ck)                                   # competitor density = how contested
+            band = 'Low' if n < 12 else ('Med' if n <= 20 else 'High')
+            is_gap = pd.isna(mine)
             rows.append({'platform': p, 'keyword': k,
                          'your_best_rank': int(mine) if pd.notna(mine) else '',
                          'status': 'ranked' if pd.notna(mine) else 'GAP — not listed',
+                         'competition': band, 'competitors_seen': n,
                          'top_competitor': (top['competitor'].iloc[0] if len(top) else ''),
-                         'competitors_seen': len(ck)})
-    sheets['Rankings_Gaps'] = pd.DataFrame(rows)
+                         'OPPORTUNITY': bool(is_gap and band == 'Low')})   # under-served + you're absent
+    df = pd.DataFrame(rows).sort_values(['OPPORTUNITY', 'platform', 'competitors_seen'], ascending=[False, True, True])
+    sheets['Rankings_Gaps'] = df
 
 # 2) Competitor prices — same-keyword rivals with price/rating (Q1)
 if len(comp):
